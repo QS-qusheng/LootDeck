@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Runtime data — personal ledger data never belongs in this repo.
+# Use data.example/ as the template instead.
+data/
+*.db
+*.sqlite
+*.sqlite3
+app.db
+
+# Local config & secrets
+.env
+.env.*
+!.env.example
+*.local.json
+*secret*
+*credential*
+*.key
+*.pem
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Bun cache
+.bun-cache/
+*.tsbuildinfo

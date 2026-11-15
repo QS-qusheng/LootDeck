@@ -1,0 +1,610 @@
+/* Web-font slot: uncomment the line below and put your font there. A web-font
+   @import must come before the Tailwind import — an @import placed after any
+   other rule is a build error, and it is reported against a line number in the
+   expanded Tailwind output, far past the end of this file, so the message
+   cannot point you at the mistake. */
+/* 甲板主题字体（Google Fonts，OFL）：Baloo 2——圆润游戏感粗圆体，用于标题的
+   英文与数字（中文无字形、自动回落现行字体栈）。仅在 [data-deck="on"] 皮肤层
+   里被引用；关闭时不改变现行字体。 */
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
+@import "tailwindcss-safe-area";
+
+@theme {
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+  --text-4xl: 36px;
+  --text-4xl--line-height: 40px;
+  --text-5xl: 48px;
+  --text-5xl--line-height: 52px;
+}
+
+/* ── 设计令牌：QShip 图鉴页 roster.css 原值逐字移植 ─────────────────── */
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5fa;
+  --surface: #fff;
+  --surface-alt: #eef0f7;
+  --text: #232838;
+  --text-muted: #7c8194;
+  --ink-2: #5c6572;
+  --caught-bg: #fff8e1;
+  --caught-border: #d9a521;
+  --gold-text: #9a7200;
+  --border: #e4e7ee;
+  --progress-bg: #e8eaf3;
+  --accent-glow-rgb: 217, 165, 33;
+  /* 本页既有别名（映射到图鉴令牌，不另起一套色） */
+  --dim: var(--text-muted);
+  --accent: #0d5c4d;
+  --radius: 14px;
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface-alt);
+  --space-muted: var(--text-muted);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161f;
+    --surface: #1e2230;
+    --surface-alt: #262b3a;
+    --text: #eceef4;
+    --text-muted: #9aa0b4;
+    --ink-2: #aab0c0;
+    --caught-bg: #2a2110;
+    --caught-border: #d9a521;
+    --gold-text: #e3b341;
+    --border: #2e3345;
+    --progress-bg: #262b3a;
+    --accent: #2dd4bf;
+  }
+}
+
+/* ── 进度条（Fix-45 两行式）：外层 12px / 分区小条 9px·110px ────────── */
+.qs-progress {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--progress-bg);
+  box-shadow: inset 0 1px 3px rgba(35, 40, 56, 0.16);
+  overflow: hidden;
+}
+.qs-progress-sm {
+  height: 9px;
+  width: 110px;
+}
+.qs-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(90deg, #d9a521, #f0a832 55%, #ef7d4a);
+  transition: width 0.3s;
+}
+
+/* ── 战令轨道（bigbullui BattlePassTrack 的已点亮段 / XP 填充）：与 .qs-progress-fill 同一金渐变配方 ── */
+.qs-bp-seg-on {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(90deg, #d9a521, #f0a832 55%, #ef7d4a);
+  box-shadow: inset 0 0 0 1px rgba(217, 165, 33, 0.45);
+}
+.qs-bp-fill {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(90deg, #d9a521, #f0a832 55%, #ef7d4a);
+}
+
+/* ── 卡墙网格（roster.css 原值） ─────────────────────────────────────── */
+.qs-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 14px 10px;
+}
+
+/* 未点亮：图片置灰（roster.css 原值） */
+.qs-unlit-img {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+/* 点亮名字色（roster.css 原值） */
+.qs-lit-name {
+  color: var(--gold-text);
+}
+/* 点亮卡底（roster.css caught 配色） */
+.qs-caught {
+  background: var(--caught-bg);
+  border-color: var(--caught-border);
+}
+/* 点亮·热卡外发光（roster.css 原值） */
+.qs-hot {
+  box-shadow: 0 0 12px rgba(217, 165, 33, 0.55);
+}
+/* 编号 / 徽章层：z-index 3，保持 crisp 在最上（Fix-35/36/37 层级合同） */
+.qs-badge-layer {
+  position: relative;
+  z-index: 3;
+}
+
+/* ── 图鉴序号圆角标（与补给泵图水源节点角标同款：橙金渐变圆底 + 白边 +
+   一层小投影，泵图为内联同值配方，此处抽成类供卡墙共用）。
+   只在甲板主题下显示（关主题时卡面无此角标，与原 No. 小丸同一显隐口径）；
+   压在卡面左上角、骑住边角，数字为裸序号（无 No. 前缀、无补零）。 */
+.qs-dex-badge {
+  display: none;
+}
+[data-deck="on"] .qs-dex-badge {
+  display: inline-flex;
+  position: absolute;
+  left: -7px;
+  top: -7px;
+  z-index: 3;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(90deg, #d9a521, #f0a832 55%, #ef7d4a);
+  color: #3d2c00;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 5px rgba(35, 40, 56, 0.35);
+  pointer-events: none;
+}
+
+/* ── 闪箔基座（mobile-patch.css 603–646 原码） ───────────────────────── */
+.bc-fx,
+.bc-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.bc-fx::before,
+.bc-fx::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* ── 彩虹配方 .bc-r-rainbow（原码逐字；纹理为等效闪粉 PNG，文件名保持 holo-glitter.png） */
+.bc-r-rainbow {
+  --pointer-x: 68%;
+  --pointer-y: 30%;
+  --pointer-from-left: 0.68;
+  --pointer-from-top: 0.3;
+  --pointer-from-center: 0.6;
+  --r1: hsl(0, 57%, 37%);
+  --r2: hsl(40, 53%, 39%);
+  --r3: hsl(90, 60%, 35%);
+  --r4: hsl(180, 60%, 35%);
+  --r6: hsl(210, 57%, 39%);
+  --r7: hsl(280, 55%, 31%);
+}
+.bc-r-rainbow .bc-fx {
+  background-image:
+    linear-gradient(-45deg, var(--r1), var(--r4)),
+    url("./assets/holo-glitter.png"),
+    linear-gradient(-30deg, var(--r1), var(--r2), var(--r3), var(--r4), var(--r4), var(--r6), var(--r7), var(--r1), var(--r2), var(--r3), var(--r4), var(--r4), var(--r6), var(--r7), var(--r1));
+  background-blend-mode: luminosity, soft-light;
+  background-size: 200% 200%, 180px 180px, 400% 400%;
+  background-position:
+    calc(25% + (50% * var(--pointer-from-left))) calc(25% + (50% * var(--pointer-from-top))),
+    center,
+    calc(25% + (var(--pointer-from-left) * 50%)) calc(25% + (var(--pointer-from-top) * 50%));
+  filter: brightness(calc((var(--pointer-from-center) * 0.25) + 0.6)) contrast(2.2) saturate(0.8);
+  opacity: 0.52;
+}
+.bc-r-rainbow .bc-fx::after {
+  background-image:
+    url("./assets/holo-glitter.png"),
+    linear-gradient(-60deg, var(--r1), var(--r2), var(--r3), var(--r4), var(--r4), var(--r6), var(--r7), var(--r1));
+  background-blend-mode: soft-light;
+  background-size: 180px 180px, 400% 400%;
+  background-position: center, var(--pointer-x) var(--pointer-y);
+  filter: brightness(calc((var(--pointer-from-center) * 0.3) + 0.55)) contrast(2) saturate(1);
+  mix-blend-mode: color-dodge;
+  opacity: 0.55;
+}
+.bc-r-rainbow .bc-glare {
+  background-image: radial-gradient(
+    farthest-corner circle at var(--pointer-x) var(--pointer-y),
+    hsl(0, 0%, 80%),
+    hsla(187, 10%, 85%, 0.25) 30%,
+    hsl(197, 6%, 25%) 120%
+  );
+  filter: brightness(0.9) contrast(1.75);
+  opacity: calc(var(--pointer-from-center) * 0.9);
+  mix-blend-mode: hard-light;
+}
+
+/* ── 惊艳配方 .bc-r-amazing（原码逐字） ──────────────────────────────── */
+.bc-r-amazing {
+  --pointer-x: 74%;
+  --pointer-y: 16%;
+  --pointer-from-left: 0.74;
+  --pointer-from-top: 0.16;
+  --pointer-from-center: 0.66;
+}
+.bc-r-amazing .bc-fx {
+  background-image:
+    url("./assets/holo-glitter.png"),
+    conic-gradient(
+      from 200deg at var(--pointer-x) var(--pointer-y),
+      hsl(0, 75%, 55%),
+      hsl(50, 80%, 50%),
+      hsl(110, 65%, 45%),
+      hsl(190, 75%, 50%),
+      hsl(260, 70%, 55%),
+      hsl(320, 75%, 52%),
+      hsl(0, 75%, 55%)
+    ),
+    radial-gradient(
+      farthest-corner circle at var(--pointer-x) var(--pointer-y),
+      rgba(255, 255, 255, 0.85),
+      transparent 42%
+    );
+  background-size: 160px 160px, cover, cover;
+  background-blend-mode: hard-light;
+  mix-blend-mode: color-dodge;
+  filter: brightness(0.55) contrast(1.5) saturate(1.7);
+  opacity: 0.88;
+}
+.bc-r-amazing .bc-fx::after {
+  background-image: repeating-linear-gradient(
+    115deg,
+    rgba(255, 0, 90, 0.13) 0 26px,
+    rgba(255, 180, 0, 0.13) 26px 52px,
+    rgba(0, 200, 160, 0.13) 52px 78px,
+    rgba(0, 110, 255, 0.13) 78px 104px,
+    rgba(160, 0, 255, 0.13) 104px 130px
+  );
+  mix-blend-mode: overlay;
+}
+.bc-r-amazing .bc-glare {
+  background-image: radial-gradient(
+    farthest-corner circle at var(--pointer-x) var(--pointer-y),
+    hsla(0, 0%, 100%, 0.75),
+    transparent 55%
+  );
+  mix-blend-mode: soft-light;
+}
+
+/* ── 待机光漂移（Fix-37 原码）：@property 注册 + qsDrift ─────────────── */
+@property --pointer-x {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 50%;
+}
+@property --pointer-y {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 50%;
+}
+@property --pointer-from-left {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+@property --pointer-from-top {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+@property --pointer-from-center {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+@keyframes qsDrift {
+  from {
+    --pointer-x: 28%;
+    --pointer-y: 20%;
+    --pointer-from-left: 0.28;
+    --pointer-from-top: 0.2;
+    --pointer-from-center: 0.42;
+  }
+  to {
+    --pointer-x: 74%;
+    --pointer-y: 66%;
+    --pointer-from-left: 0.74;
+    --pointer-from-top: 0.66;
+    --pointer-from-center: 0.68;
+  }
+}
+/* 点亮卡待机漂移（每卡 --qs-delay 错开相位）；hover 时停漂移、改由指针驱动同一组变量 */
+.qs-drift {
+  animation: qsDrift 9s ease-in-out infinite alternate;
+  animation-delay: var(--qs-delay, 0s);
+}
+.qs-drift:hover {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qs-drift {
+    animation: none;
+  }
+}
+
+/* ── 提效工具·装备格（游戏装备槽位质感，仅 efficiency 分区） ──────────
+   方形槽位 + 稀有度描边（--equip 决定稀有色）+ 内陷斜面 + 微光；
+   已点亮＝已装备（彩色发光），未点亮沿用 .qs-unlit-img 置灰。 */
+.qs-equip-slot {
+  border-radius: 10px;
+  border: 2px solid var(--equip, #d9a521);
+  background: linear-gradient(150deg, #3a4260 0%, #232839 55%, #171b29 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.45),
+    inset 0 2px 7px rgba(0, 0, 0, 0.65),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.07),
+    0 0 10px color-mix(in srgb, var(--equip, #d9a521) 55%, transparent);
+  color: color-mix(in srgb, var(--equip, #d9a521) 45%, #ffffff);
+}
+
+/* Phone tap targets: at least 32px tall. */
+@layer base {
+  button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) {
+    min-height: 2rem;
+  }
+}
+
+/* ══ 甲板主题（皮肤层 · 素净清新版） ═══════════════════════════════════
+   开关在 App 顶栏，状态落在 <html data-deck="on">（详情卡走 body portal，
+   属性必须挂在 html 上才能连弹窗一起换皮）。默认无此属性＝现行风格逐像素
+   不变；本节全部规则都以 [data-deck="on"] 为前提，只改视觉变量与装饰。
+   基调：QShip 科技风打底 + 清新色系（奶油白、海水蓝为主）+ 怪物收集图鉴
+   的「感受」靠轻元素带出——圆润厚边、图鉴编号、分区类型色小徽章；不用
+   任何任天堂 IP 素材。装饰做减法：无满页纹理、无大面积色块，2.5D 硬阴影
+   只留一层且幅度减小。
+   - 页面底：奶油色实色，无纹理平铺（像素木贴图曾满页平铺，因砖墙感压字
+     已退场；资产 deck-wood.png 不再被引用）。
+   - 文字落点：所有文字都坐在实色面上——泵图/左榜/战令/详情卡走
+     .deck-panel 奶油白面，四个分区的标题与卡墙整体垫 .deck-board 奶油色
+     实色面板（木色描边 + 一层小幅硬阴影）。
+   - 泵图面板：清新海水渐变 + 两层 SVG 浪花横向平移动画（纯 SVG/CSS
+     技法，本页自写路径）；流动连线改水蓝水柱（虚线流光），节点硬阴影
+     同步收小。
+   - 类型色（参考开源图鉴项目的类型色系统，降饱和清新版）：只用在分区
+     标题前的小徽章与编号小标上——API 能打水＝水蓝、免费VPS＝电黄、
+     提效工具＝钢青灰、工具福利＝草绿、大羊毛推荐＝珊瑚。
+   - 字体：Baloo 2（Google Fonts，OFL）圆润游戏体，仅拉丁与数字。 */
+:root[data-deck="on"] {
+  color-scheme: light;
+  --bg: #faf3e2;
+  --surface: #fffdf5;
+  --surface-alt: #e8f6fb;
+  --text: #2f3e33;
+  --text-muted: #68795f;
+  --ink-2: #4c5c50;
+  --caught-bg: #fff6d9;
+  --caught-border: #f2b705;
+  --gold-text: #97700a;
+  --border: #d9c08f;
+  --progress-bg: #eee1c2;
+  --accent-glow-rgb: 242, 183, 5;
+  --accent: #1293cc;
+}
+
+/* 页面底：奶油色实色，无纹理——任何文字下方都不许有纹理 */
+[data-deck="on"] .deck-root {
+  background-color: #faf3e2;
+  background-image: none;
+}
+
+/* 面板（泵图框 / 左榜 / 战令 / 详情卡，挂 .deck-panel 钩子）：奶油白面 +
+   厚圆角 + 暖棕描边 + 一层小幅右下硬阴影，2.5D 浮起从简 */
+[data-deck="on"] .deck-panel {
+  border-width: 2px;
+  border-color: #d8bd8a;
+  border-radius: 20px;
+  box-shadow: 2px 2px 0 rgba(150, 112, 52, 0.22);
+}
+
+/* 分区板面（四个分区的标题 + 卡墙整体垫一块，挂 .deck-board 钩子）：
+   奶油色实色面板 + 木色描边 + 一层小幅硬阴影；卡片的名称、价值句、
+   状态小字全部坐在这块实色面上，与左列榜、战令条同口径 */
+[data-deck="on"] .deck-board {
+  background-color: #fffdf5;
+  border: 2px solid #d8bd8a;
+  border-radius: 20px;
+  box-shadow: 2px 2px 0 rgba(150, 112, 52, 0.22);
+  padding: 14px 14px 18px;
+}
+@media (min-width: 1024px) {
+  [data-deck="on"] .deck-board {
+    padding: 16px 18px 20px;
+  }
+}
+
+/* 标题字体：英文与数字走 Baloo 2 圆润游戏体，中文回落现行字体栈 */
+[data-deck="on"] h2,
+[data-deck="on"] h3 {
+  font-family: "Baloo 2", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  letter-spacing: 0.01em;
+}
+/* 战令 Lv. 数字同口径（BattlePassTrack 头行是 .font-mono 容器） */
+[data-deck="on"] div[role="progressbar"] > .font-mono {
+  font-family: "Baloo 2", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  letter-spacing: 0.03em;
+}
+/* 页脚署名行英文点缀同字体 */
+[data-deck="on"] .deck-trade {
+  font-family: "Baloo 2", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* 分区类型色徽章：标题前一枚圆角小方块（2.5D 小硬阴影），颜色即本区类型色 */
+[data-deck="on"] section[aria-label="提效工具"] > div:first-child h2::before,
+[data-deck="on"] section[aria-label="免费VPS"] > div:first-child h2::before,
+[data-deck="on"] section[aria-label="API 能打水"] > div:first-child h2::before,
+[data-deck="on"] section[aria-label="工具福利"] > div:first-child h2::before,
+[data-deck="on"] aside[aria-label="大羊毛推荐"] h2::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 4px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  box-shadow: 2px 2px 0 rgba(60, 70, 60, 0.25);
+}
+[data-deck="on"] section[aria-label="提效工具"] > div:first-child h2::before {
+  background: #7d9db0;
+}
+[data-deck="on"] section[aria-label="免费VPS"] > div:first-child h2::before {
+  background: #f5b301;
+}
+[data-deck="on"] section[aria-label="API 能打水"] > div:first-child h2::before {
+  background: #2ea6e0;
+}
+[data-deck="on"] section[aria-label="工具福利"] > div:first-child h2::before {
+  background: #58b368;
+}
+[data-deck="on"] aside[aria-label="大羊毛推荐"] h2::before {
+  background: #ff7a66;
+}
+
+/* 卡面 2.5D：厚圆角 + 浅钢蓝描边 + 一层小幅右下硬阴影；点亮卡改晴黄
+   描边、金色硬阴影并提亮闪箔（金箔保留，配方不变、只提透明度） */
+[data-deck="on"] .deck-face {
+  border-width: 2px;
+  border-color: #aecedb;
+  border-radius: 18px;
+  box-shadow: 2px 2px 0 rgba(64, 116, 148, 0.22);
+}
+[data-deck="on"] .deck-face.qs-caught {
+  border-color: #f2b705;
+  box-shadow:
+    2px 2px 0 rgba(183, 128, 8, 0.35),
+    0 0 10px rgba(242, 183, 5, 0.35);
+}
+[data-deck="on"] .qs-hot {
+  box-shadow:
+    2px 2px 0 rgba(183, 128, 8, 0.35),
+    0 0 12px rgba(242, 183, 5, 0.5);
+}
+[data-deck="on"] .bc-r-rainbow .bc-fx {
+  opacity: 0.6;
+}
+[data-deck="on"] .bc-r-amazing .bc-fx {
+  opacity: 0.95;
+}
+
+/* 未点亮卡：图面底衬改浅灰蓝（剪影灰口径），深色字形仍可辨认 */
+[data-deck="on"] .deck-unlit-bg {
+  background-color: #dde9ef;
+}
+
+/* 装备槽：改浅色奶油槽面（稀有度描边色不变），图标色加深以便在浅底可读 */
+[data-deck="on"] .qs-equip-slot {
+  background: linear-gradient(150deg, #fffaf0 0%, #fdf0d0 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(120, 84, 20, 0.12),
+    inset 0 2px 5px rgba(120, 84, 20, 0.18),
+    0 0 8px color-mix(in srgb, var(--equip, #d9a521) 45%, transparent);
+  color: color-mix(in srgb, var(--equip, #d9a521) 72%, #4a3200);
+}
+
+/* 主题开关：游戏 UI 式圆润厚边 + 按压回弹（偏移硬阴影随按下收起） */
+[data-deck="on"] button[role="switch"] {
+  border-width: 2px;
+  border-color: #d8bd8a;
+  box-shadow: 2px 2px 0 rgba(150, 112, 52, 0.28);
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
+}
+[data-deck="on"] button[role="switch"]:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 rgba(150, 112, 52, 0.28);
+}
+
+/* ── 泵图海水面板 + 浪花（.deck-aqua / .deck-wave 仅开主题时由组件挂载） ── */
+[data-deck="on"] .deck-aqua {
+  background-image: linear-gradient(180deg, #c9f0fc 0%, #93d9f4 52%, #5fbdee 100%);
+  border-color: #3f9fd2;
+  box-shadow: 2px 2px 0 rgba(34, 102, 148, 0.28);
+}
+/* 两层 SVG 浪花：整层横向平移半程无缝循环，前层白沫、后层深水蓝错速反向 */
+.deck-wave {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 200%;
+  pointer-events: none;
+}
+.deck-wave-a {
+  height: 40px;
+  opacity: 0.55;
+  animation: deckWaveMove 6.5s linear infinite;
+}
+.deck-wave-b {
+  height: 30px;
+  opacity: 0.4;
+  animation: deckWaveMove 11s linear infinite reverse;
+}
+@keyframes deckWaveMove {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .deck-wave {
+    animation: none;
+  }
+}
+/* 流动连线＝水柱：加粗虚线流光（覆盖 xyflow animated 边的默认虚线节奏） */
+[data-deck="on"] .react-flow__edge.animated path {
+  stroke-dasharray: 12 7;
+  animation-duration: 0.9s;
+}
+
+/* ── 图鉴条目元素（.deck-only）：只在甲板主题下显示，关主题时不占位 ── */
+.deck-only {
+  display: none;
+}
+[data-deck="on"] .deck-only {
+  display: revert;
+}
+
+/* ── 卡面下方 meta 收平（仅甲板主题；关主题时无此规则、版式逐像素不变） ──
+   名字 / 价值句 / 状态小字各按全场实际最大行数预留固定行高，同排卡片
+   的文字起点严格对齐，不再因行数不一而参差；价值句与名字用
+   text-wrap: balance 均分行长，避免单字成行（如「…开发/机」）与长串
+   在词中折断。行高口径与 App 侧 Tailwind 类一致：名字 text-sm/leading-5
+   （20px）实际最多 2 行、价值句 13px×1.5（19.5px）实际最多 3 行
+   （MarkItDown / Azure）、状态小字 text-[11px]/leading-4（16px）实际
+   最多 4 行（Google Cloud 的到期注记最长）。 */
+[data-deck="on"] .deck-card-name {
+  min-height: 2.5rem;
+  text-wrap: balance;
+}
+[data-deck="on"] .deck-card-value {
+  min-height: 3.65625rem;
+  text-wrap: balance;
+}
+[data-deck="on"] .deck-card-status {
+  min-height: 4rem;
+  align-content: flex-start;
+}
