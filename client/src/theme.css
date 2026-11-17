@@ -583,6 +583,17 @@
   animation-duration: 0.9s;
 }
 
+/* ── 泵图触摸放行（致命级修复，2026-11-17）：xyflow 自带样式给覆盖整张
+   图的 .react-flow__pane 写死了 touch-action: none，手机浏览器据此把
+   图上任何位置起手的滑动都判给 JS、不再转成页面滚动；而图本身关了
+   拖拽平移，手势没人接——手指落在泵图区域内页面就滚不动。此处以更高
+   优先级改回 pan-y：单指上下滑恢复页面滚动；双指捏合不属于 pan-y，
+   仍落到 xyflow 自己的 zoomOnPinch 上，捏合放大不受影响。选择器带
+   section[aria-label] 前缀，只作用于泵图这一块，不碰其他区域。 */
+section[aria-label="补给泵图"] .react-flow__pane {
+  touch-action: pan-y;
+}
+
 /* ── 图鉴条目元素（.deck-only）：只在甲板主题下显示，关主题时不占位 ── */
 .deck-only {
   display: none;

@@ -32,8 +32,12 @@
    重 fit——只盯宽度时，高度落位那一步会被漏掉、fit 停在挂载初期的
    临时视图上（缩放夹到 minZoom、图钉在面板顶部约四成处，2026-11-17
    导出复核实证后修）；双指捏合缩放开放（zoomOnPinch），细字可
-   捏合放大看清，一指拖动仍归页面滚动（panOnDrag 保持关）。紧凑版不画
-   水柱柱体层，免得粗柱压过中间行的节点。 */
+   捏合放大看清，一指拖动归页面滚动——注意光靠 panOnDrag 关并不够：
+   xyflow 样式表给 .react-flow__pane 写死了 touch-action: none，图上
+   任何位置起手的滑动都会被浏览器判给 JS、页面滚不动（实测致命问题）；
+   真正的放行是 theme.css 里对泵图 pane 的 touch-action: pan-y 覆盖，
+   删那条规则此问题立刻复发。紧凑版不画水柱柱体层，免得粗柱压过
+   中间行的节点。 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 Background,
