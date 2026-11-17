@@ -10,6 +10,7 @@
     "build:client": "bun ./client/build.mjs"
   },
   "dependencies": {
+    "@floating-ui/react-dom": "^2.1.9",
     "@hatch/space-sdk": "file:/opt/hatch/skills/spaces/ts-runtime/dist/space-sdk.tgz",
     "@tanstack/react-query": "5.100.10",
     "@xyflow/react": "^12.12.1",

@@ -1,12 +1,18 @@
 import {
 useEffect,
-useLayoutEffect,
 useRef,
 useState,
 type CSSProperties,
 type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useFloating,
+} from "@floating-ui/react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SafeAreaTopScrim } from "@hatch/space-sdk/client";
 import { api, type ApiResponse } from "./api";
@@ -60,15 +66,17 @@ function metaFor(p: Provider): { label: string; cls: string } {
   return isLit(p) ? LIT_META : UNLIT_META;
 }
 
-// 领不了：优惠是新人限定，用户是阿里云老号、资格不满足。这两家在本类内沉底，
-// 卡面挂灰色「领不了」标记，详情卡里写明原因；其余卡排序不受影响。
+// 领不了：优惠是新人限定，作者本人是阿里云老号、资格不满足。这两家在本类
+// 内沉底，卡面挂灰色「领不了」标记，详情卡里写明原因；其余卡排序不受影响。
+// 这是作者本人看板的事实，只在看板里有作者数据时成立（示例状态或作者
+// 本人）；新用户自己的看板里他们可能是新号能领，不挂此标记、不沉底。
 const UNCLAIMABLE: Record<string, string> = {
   阿里云新人礼包: "新人限定，老号领不了",
   阿里云百炼: "新人限定，老号领不了",
 };
 
-function unclaimableReason(p: Provider): string | null {
-  return UNCLAIMABLE[p.name] ?? null;
+function unclaimableReason(p: Provider, enabled: boolean): string | null {
+  return enabled ? (UNCLAIMABLE[p.name] ?? null) : null;
 }
 
 /* ── 定期任务红点：本周期还没完成就亮，完成打卡后灭，下个周期自动再亮 ── */
@@ -205,9 +213,9 @@ const TYPE_META: Record<string, { title: string; color: string }> = {
 // 类内按实际可用价值降序（sortValue 已由服务端换算：每日刷新按 30 天累计、
 // 代金券五折、免费不限量按附带赠金算），同值按台账顺序；点亮与否不影响位置。
 // 例外：「领不了」的卡沉到本类末尾（仍可见），免得按价值从前往后看时误以为能领。
-function bySize(a: Provider, b: Provider): number {
-  const sinkA = unclaimableReason(a) ? 1 : 0;
-  const sinkB = unclaimableReason(b) ? 1 : 0;
+function bySize(a: Provider, b: Provider, noClaimEnabled: boolean): number {
+  const sinkA = unclaimableReason(a, noClaimEnabled) ? 1 : 0;
+  const sinkB = unclaimableReason(b, noClaimEnabled) ? 1 : 0;
   return (
     sinkA - sinkB ||
     b.sortValue - a.sortValue ||
@@ -240,6 +248,7 @@ const BRAND: Record<string, { bg: string; mark: string }> = {
   "agent-browser": { bg: "#0f766e", mark: "ab" },
   "agent-desktop": { bg: "#0369a1", mark: "ad" },
   "Agent Reach": { bg: "#b45309", mark: "AR" },
+  Scrapling: { bg: "#0e7490", mark: "Sc" },
   "new-api": { bg: "#334155", mark: "na" },
   Codex: { bg: "#10a37f", mark: "Cx" },
   Groq: { bg: "#f43e01", mark: "Gr" },
@@ -250,18 +259,21 @@ const BRAND: Record<string, { bg: string; mark: string }> = {
   "Google Cloud": { bg: "#4285f4", mark: "GC" },
   "Microsoft Azure": { bg: "#0078d4", mark: "Az" },
   AWS: { bg: "#ff9900", mark: "AW" },
+  示例云电脑: { bg: "#64748b", mark: "例" },
+  示例海外服务器: { bg: "#475569", mark: "例" },
 };
 const FALLBACK_BG = ["#0d5c4d", "#b45309", "#0369a1", "#be185d", "#4d7c0f"];
 
 /* ── 提效工具·装备图标（图形表意，不用单字块）＋稀有度描边色 ──────────
    agent-browser 浏览器窗口+光标 / agent-desktop 显示器 /
-   Agent Reach 雷达信号 / new-api 网关阀门 / Codex 终端窗口 >_ /
+   Agent Reach 雷达信号 / Scrapling 蜘蛛网+垂丝蜘蛛 / new-api 网关阀门 / Codex 终端窗口 >_ /
    MarkItDown 文档转出 / 共享记忆库 数据库 / 本地语音 扬声器声波。
    稀有色喂 .qs-equip-slot 的 --equip。 */
 const EQUIP_RARITY: Record<string, string> = {
   "agent-browser": "#a855f7",
   "agent-desktop": "#3b82f6",
   "Agent Reach": "#14b8a6",
+  Scrapling: "#06b6d4",
   "new-api": "#f59e0b",
   Codex: "#10b981",
   MarkItDown: "#e11d48",
@@ -306,6 +318,16 @@ function EquipIcon({ name, cls = "h-7 w-7" }: { name: string; cls?: string }) {
           <path d="M12 12L18.5 5.5" />
           <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none" />
           <circle cx="16.8" cy="13.8" r="1.1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "Scrapling":
+      return (
+        <svg {...common} aria-hidden="true">
+          <path d="M4 4l5.2 5.2M20 4l-5.2 5.2M4 20l5.2-5.2M20 20l-5.2-5.2" strokeWidth="1.3" />
+          <path d="M4 9.5c2.8 1.6 5.4 2.4 8 2.4s5.2-.8 8-2.4M6.8 4c1 2.6 2.8 4.4 5.2 5.4 2.4-1 4.2-2.8 5.2-5.4" strokeWidth="1.3" />
+          <path d="M12 12.5v2.6" strokeWidth="1.4" />
+          <circle cx="12" cy="17.6" r="2.1" fill="currentColor" stroke="none" />
+          <path d="M10.3 16.4l-2-1.4M13.7 16.4l2-1.4M10.2 18.6l-2.2.8M13.8 18.6l2.2.8" strokeWidth="1.3" />
         </svg>
       );
     case "new-api":
@@ -470,93 +492,50 @@ function brandFor(p: Provider): { bg: string; mark: string } {
   return { bg, mark };
 }
 
-/* ── 详情卡锚点：记录触发元素的视口矩形，详情卡据此定位 ─────────────── */
-type AnchorRect = {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-};
-
-function rectOf(el: HTMLElement): AnchorRect {
-  const r = el.getBoundingClientRect();
-  return {
-    left: r.left,
-    top: r.top,
-    right: r.right,
-    bottom: r.bottom,
-    width: r.width,
-    height: r.height,
-  };
-}
-
 /* ── 顶层渲染的详情卡：portal 到 body + 最高 z-index。
    点亮卡的闪箔/漂移动画各自建层叠上下文，卡内 absolute 弹层会被相邻卡压住；
-   只有挂到根节点、脱离卡片层叠上下文，才能保证完整压在所有卡片之上。 ── */
+   只有挂到根节点、脱离卡片层叠上下文，才能保证完整压在所有卡片之上。
+   定位统一走 Floating UI（@floating-ui/react-dom，MIT）：左列条目与卡墙
+   卡片同一套规则——优先落在锚点下方（bottom-start、间距 8px），下方
+   放不下自动翻到上方，水平方向 shift 收回视口内（8px 边距）；autoUpdate
+   让弹框在滚动/缩放时持续贴住锚点，不再用触发瞬间的手算矩形快照
+   （快照会随滚动过期、不同来源还各弹各的）。 ── */
 function AnchoredDetail({
   p,
   dexNo,
-  rect,
-  side,
+  noClaimEnabled,
+  anchorEl,
   onHoverStart,
   onHoverEnd,
 }: {
   p: Provider;
   dexNo?: number;
-  rect: AnchorRect;
-  side: "right" | "below";
+  noClaimEnabled: boolean;
+  anchorEl: HTMLElement;
   onHoverStart: () => void;
   onHoverEnd: () => void;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const place = () => {
-      const w = el.offsetWidth;
-      const h = el.offsetHeight;
-      if (w === 0 || h === 0) return;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      let left = side === "right" ? rect.right + 8 : rect.left + rect.width / 2 - w / 2;
-      let top = side === "right" ? rect.top : rect.bottom + 8;
-      // 左列向右弹放不下时改落到该行下方，绝不伸进卡墙被裁切
-      if (side === "right" && left + w > vw - 8) {
-        left = rect.left;
-        top = rect.bottom + 8;
-      }
-      if (top + h > vh - 8) top = rect.top - h - 8;
-      left = Math.min(Math.max(8, left), Math.max(8, vw - w - 8));
-      top = Math.min(Math.max(8, top), Math.max(8, vh - h - 8));
-      setPos((cur) => (cur && cur.left === left && cur.top === top ? cur : { left, top }));
-    };
-    place();
-    const ro = new ResizeObserver(place);
-    ro.observe(el);
-    window.addEventListener("resize", place);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", place);
-    };
-  }, [rect, side]);
+  const { refs, floatingStyles, isPositioned } = useFloating({
+    open: true,
+    strategy: "fixed",
+    placement: "bottom-start",
+    middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+    elements: { reference: anchorEl },
+  });
 
   return createPortal(
     <div
-      ref={ref}
-      className="fixed z-[100] hidden sm:block"
+      ref={refs.setFloating}
+      className="z-[100] hidden sm:block"
       style={{
-        left: pos ? pos.left : 0,
-        top: pos ? pos.top : 0,
-        visibility: pos ? "visible" : "hidden",
+        ...floatingStyles,
+        visibility: isPositioned ? "visible" : "hidden",
       }}
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
     >
-      <DetailCard p={p} dexNo={dexNo} />
+      <DetailCard p={p} dexNo={dexNo} noClaimEnabled={noClaimEnabled} />
     </div>,
     document.body,
   );
@@ -566,10 +545,12 @@ function AnchoredDetail({
 function DetailCard({
   p,
   dexNo,
+  noClaimEnabled,
   onClose,
 }: {
   p: Provider;
   dexNo?: number;
+  noClaimEnabled: boolean;
   onClose?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -600,7 +581,7 @@ function DetailCard({
 
   const lit = isLit(p);
   const meta = metaFor(p);
-  const noClaim = unclaimableReason(p);
+  const noClaim = unclaimableReason(p, noClaimEnabled);
   // 图鉴条目条用：类型徽章（按分区类型色）+ 量级属性条（sortValue 对数标尺，
   // 与卡墙排序同一口径，只作量级直观呈现）
   const typeMeta = TYPE_META[groupOf(p)] ?? { title: "工具福利", color: "#58b368" };
@@ -916,6 +897,7 @@ function DetailCard({
 function WoolTile({
   p,
   dexNo,
+  noClaimEnabled,
   active,
   onEnter,
   onLeave,
@@ -923,26 +905,27 @@ function WoolTile({
 }: {
   p: Provider;
   dexNo: number;
+  noClaimEnabled: boolean;
   active: boolean;
-  onEnter: (rect: AnchorRect) => void;
+  onEnter: (el: HTMLElement) => void;
   onLeave: () => void;
-  onTap: (rect: AnchorRect) => void;
+  onTap: (el: HTMLElement) => void;
 }) {
   const lit = isLit(p);
   const meta = metaFor(p);
-  const noClaim = unclaimableReason(p);
+  const noClaim = unclaimableReason(p, noClaimEnabled);
   const hot = lit && p.featuredRank > 0;
   return (
     <div
       className="relative"
-      onMouseEnter={(e) => onEnter(rectOf(e.currentTarget))}
+      onMouseEnter={(e) => onEnter(e.currentTarget)}
       onMouseLeave={onLeave}
     >
       <button
         type="button"
         aria-pressed={active}
         aria-label={`${p.name}，${meta.label}，${p.quotaText || "额度待填"}${taskDue(p) ? `，${CYCLE_LABEL[p.taskCycle]}定期任务待办` : ""}`}
-        onClick={(e) => onTap(rectOf(e.currentTarget))}
+        onClick={(e) => onTap(e.currentTarget)}
         onMouseMove={lit ? trackPointer : undefined}
         style={lit ? delayFor(p.id) : undefined}
         className="block w-full text-left"
@@ -1018,30 +1001,32 @@ function WoolTile({
 /* ── 左列推荐行 ── */
 function FeaturedRow({
   p,
+  noClaimEnabled,
   active,
   onEnter,
   onLeave,
   onTap,
 }: {
   p: Provider;
+  noClaimEnabled: boolean;
   active: boolean;
-  onEnter: (rect: AnchorRect) => void;
+  onEnter: (el: HTMLElement) => void;
   onLeave: () => void;
-  onTap: (rect: AnchorRect) => void;
+  onTap: (el: HTMLElement) => void;
 }) {
   const lit = isLit(p);
   const meta = metaFor(p);
-  const noClaim = unclaimableReason(p);
+  const noClaim = unclaimableReason(p, noClaimEnabled);
   return (
     <div
       className="relative"
-      onMouseEnter={(e) => onEnter(rectOf(e.currentTarget))}
+      onMouseEnter={(e) => onEnter(e.currentTarget)}
       onMouseLeave={onLeave}
     >
       <button
         type="button"
         aria-pressed={active}
-        onClick={(e) => onTap(rectOf(e.currentTarget))}
+        onClick={(e) => onTap(e.currentTarget)}
         onMouseMove={lit ? trackPointer : undefined}
         style={lit ? delayFor(p.id) : undefined}
         className={`relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl px-2 py-1.5 text-left transition ${
@@ -1093,13 +1078,19 @@ export function App() {
     queryKey: ["providers"],
     queryFn: () => api.listProviders({}),
   });
+  // 泵图服务器层：真实清单只存服务端、经动作下发（仅本人状态返回）
+  const pumpServers = useQuery({
+    queryKey: ["pumpServers"],
+    queryFn: () => api.getPumpServers({}),
+  });
   // 激活键带来源（f=左列推荐 / w=卡墙）：同一家会同时出现在左列与卡墙，
   // 只按 id 判活会让两处详情卡同时弹出、互相遮挡，故按来源分别判活。
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
-  // 详情卡走顶层 portal 渲染，锚点矩形随激活键一起存（悬停与点按各一份）
-  const [hoverAnchor, setHoverAnchor] = useState<AnchorRect | null>(null);
-  const [pinnedAnchor, setPinnedAnchor] = useState<AnchorRect | null>(null);
+  // 详情卡走顶层 portal 渲染，锚点元素随激活键一起存（悬停与点按各一份），
+  // Floating UI 据元素实时定位（滚动/缩放自动跟随）
+  const [hoverEl, setHoverEl] = useState<HTMLElement | null>(null);
+  const [pinnedEl, setPinnedEl] = useState<HTMLElement | null>(null);
   const closeTimer = useRef<number | null>(null);
   const syncedRef = useRef(false);
 
@@ -1124,15 +1115,26 @@ export function App() {
   const list = providers.data?.providers ?? [];
   const litCount = list.filter(isLit).length;
 
-  // 图鉴编号：按页面显示顺序连续编排——分区顺序（提效工具→免费VPS→
-  // API 能打水→工具福利）× 类内现行排列（与卡墙渲染同一套过滤/排序），
-  // 从 001 编到全量末位，编号跟阅读顺序走、不跟台账内部 id 走。
+  // 看板状态：example＝示例状态（用户还没添置自己的战利品，整张甲板是
+  // 内置示例数据，顶部横幅明确标注）；own＝用户自己的状态。自动切换在
+  // 服务端（添置第一件自己的战利品时翻转清场），页面只读不设开关。
+  const boardMode = providers.data?.boardMode ?? "own";
+  const isExample = boardMode === "example";
+  // 看板里有作者数据（示例专属条目在册）：示例状态天然成立，作者本人
+  // 的看板也是这一路——泵图服务器层与「领不了」口径只对这样的看板成立；
+  // 新用户翻转到自己的状态后示例专属条目已被清场，两者自动消失。
+  const authorBoard = list.some((p) => p.demoOnly);
+
+  // 图鉴编号：每个板块内部各自从 1 重新开始（定版）——板块内按显示
+  // 顺序（与卡墙渲染同一套过滤/排序）编 1、2、3……，换一个板块回到 1；
+  // 卡面角标与详情卡的 No. 共用这一套编号。
   const dexNoById = new Map<number, number>();
   {
-    let n = 0;
     for (const cat of CATEGORIES) {
-      const items = list.filter((p) => groupOf(p) === cat.key).sort(bySize);
-      for (const p of items) dexNoById.set(p.id, ++n);
+      const items = list
+        .filter((p) => groupOf(p) === cat.key)
+        .sort((a, b) => bySize(a, b, authorBoard));
+      items.forEach((p, i) => dexNoById.set(p.id, i + 1));
     }
   }
 
@@ -1141,7 +1143,7 @@ export function App() {
     .sort((a, b) => a.featuredRank - b.featuredRank);
 
   const activeKey = pinnedKey ?? hoverKey;
-  const activeAnchor = pinnedKey ? pinnedAnchor : hoverAnchor;
+  const activeEl = pinnedKey ? pinnedEl : hoverEl;
   const activeId = activeKey ? Number(activeKey.slice(2)) : null;
   const activeProvider =
     activeId != null ? (list.find((p) => p.id === activeId) ?? null) : null;
@@ -1155,13 +1157,13 @@ export function App() {
       closeTimer.current = null;
     }
   };
-  const tap = (key: string, rect: AnchorRect) => {
-    setPinnedAnchor(rect);
+  const tap = (key: string, el: HTMLElement) => {
+    setPinnedEl(el);
     setPinnedKey((cur) => (cur === key ? null : key));
   };
-  const enter = (key: string, rect: AnchorRect) => {
+  const enter = (key: string, el: HTMLElement) => {
     cancelClose();
-    setHoverAnchor(rect);
+    setHoverEl(el);
     setHoverKey(key);
   };
   // 详情卡已脱离卡片 DOM，指针移过去要点状态按钮时先给一段宽限，别立刻关
@@ -1194,23 +1196,34 @@ export function App() {
           </div>
         ) : (
           <>
-            {/* ── 顶栏：项目主标题（战利品甲板 · LootDeck 小字副标）。
-                甲板主题为唯一呈现，无开关。 ── */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <div className="flex items-baseline gap-2.5">
-                <h1 className="text-xl font-bold leading-tight text-[var(--text)]">
-                  战利品甲板
-                </h1>
-                <span className="text-xs font-medium tracking-wide text-[var(--dim)]">
-                  LootDeck
+            {/* ── 页内无顶栏（2026-11-15 定版）：标题与主题开关整行已删，
+                页面打开直接从补给泵图开始；Space 名与浏览器标题保留 ── */}
+            {/* ── 示例状态横幅：整张甲板是内置示例数据时明确标注，
+                别让新用户误以为是自己的真实战利品；添置第一件自己的
+                战利品后服务端自动翻转清场，横幅随之消失 ── */}
+            {isExample ? (
+              <div
+                role="note"
+                className="deck-panel mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--radius)] border border-amber-500/60 bg-amber-50 px-4 py-3 dark:bg-amber-950/40"
+              >
+                <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">
+                  示例状态
                 </span>
+                <p className="min-w-0 flex-1 text-sm leading-6 text-[var(--text)]">
+                  你看到的是内置示例数据，不是你的真实战利品。把下面任意一家点亮、或添置第一件你自己的战利品后，这里会自动切换成你的看板，示例不再混入。
+                </p>
               </div>
-              
-            </div>
+            ) : null}
 
             {/* ── 页面最顶部：补给泵图（React Flow 本体，水源=已点亮各家） ── */}
             <div className="mb-4">
-              <PumpDiagram providers={list} deck={deck} />
+              <PumpDiagram
+                providers={list}
+                servers={pumpServers.data?.servers ?? []}
+                deck={deck}
+                showServers={isExample || authorBoard}
+                isExample={isExample}
+              />
             </div>
 
             {/* ── 战令轨道（bigbullui BattlePassTrack，MIT；tier/xp 喂点亮数） ── */}
@@ -1231,12 +1244,10 @@ export function App() {
                 className="deck-panel rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 lg:sticky lg:top-5"
               >
                 <h2 className="text-lg font-semibold text-[var(--text)]">
-                  {deck ? (
-                    <DeckIcon
-                      name="pirateFlag"
-                      className="mr-2 inline h-6 w-6 align-[-5px] text-[#c9a227]"
-                    />
-                  ) : null}
+                  <DeckIcon
+                    name="pirateFlag"
+                    className="mr-2 inline h-6 w-6 align-[-5px] text-[#c9a227]"
+                  />
                   大羊毛推荐
                 </h2>
                 <p className="mt-0.5 text-xs text-[var(--dim)]">全场量级最大的几家 · 点一家看详情</p>
@@ -1245,10 +1256,11 @@ export function App() {
                     <FeaturedRow
                       key={p.id}
                       p={p}
+                      noClaimEnabled={authorBoard}
                       active={activeKey === `f:${p.id}`}
-                      onEnter={(rect) => enter(`f:${p.id}`, rect)}
+                      onEnter={(el) => enter(`f:${p.id}`, el)}
                       onLeave={() => leave(`f:${p.id}`)}
-                      onTap={(rect) => tap(`f:${p.id}`, rect)}
+                      onTap={(el) => tap(`f:${p.id}`, el)}
                     />
                   ))}
                   {featured.length === 0 ? (
@@ -1260,13 +1272,15 @@ export function App() {
               {/* ── 右列：全量卡墙（分类 + 量级排序） ─────────────── */}
               <div className="min-w-0">
                 {CATEGORIES.map((cat) => {
-                  const items = list.filter((p) => groupOf(p) === cat.key).sort(bySize);
+                  const items = list
+                    .filter((p) => groupOf(p) === cat.key)
+                    .sort((a, b) => bySize(a, b, authorBoard));
                   const litInCat = items.filter(isLit).length;
                   return (
                     <section key={cat.key} aria-label={cat.title} className="deck-board mb-6 last:mb-0">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <h2 className="text-base font-semibold text-[var(--text)]">
-                          {deck && cat.icon ? (
+                          {cat.icon ? (
                             <DeckIcon
                               name={cat.icon}
                               className="mr-1.5 inline h-5 w-5 align-[-4px] text-[#c9a227]"
@@ -1305,10 +1319,11 @@ export function App() {
                               key={p.id}
                               p={p}
                               dexNo={dexNoById.get(p.id) ?? p.id}
+                              noClaimEnabled={authorBoard}
                               active={activeKey === `w:${p.id}`}
-                              onEnter={(rect) => enter(`w:${p.id}`, rect)}
+                              onEnter={(el) => enter(`w:${p.id}`, el)}
                               onLeave={() => leave(`w:${p.id}`)}
-                              onTap={(rect) => tap(`w:${p.id}`, rect)}
+                              onTap={(el) => tap(`w:${p.id}`, el)}
                             />
                           ))}
                         </div>
@@ -1319,27 +1334,27 @@ export function App() {
               </div>
             </div>
 
-            {/* ── 甲板主题署名行（仅开主题时出现：开源资产逐项署名） ── */}
-            {deck ? (
-              <footer className="mt-8 border-t border-[var(--border)] pt-3 text-center text-xs leading-5 text-[var(--dim)]">
-                <span className="deck-trade">Fresh deck skin</span>
-                ：图标来自 game-icons.net（Delapouite、Lorc
-                作，CC BY 3.0）；标题字体 Baloo 2 来自 Google Fonts（OFL）。版式与
-                类型色设计语言参考开源图鉴项目（MIT）；未使用任何宝可梦官方素材。
-              </footer>
-            ) : null}
+            {/* ── 甲板主题署名行（开源资产逐项署名） ── */}
+            <footer className="mt-8 border-t border-[var(--border)] pt-3 text-center text-xs leading-5 text-[var(--dim)]">
+              <span className="deck-trade">Fresh deck skin</span>
+              ：图标来自 game-icons.net（Delapouite、Lorc
+              作，CC BY 3.0）；泵图云形取自 Font Awesome Free 的 cloud
+              图标（Fonticons, Inc.，CC BY 4.0）；详情弹框定位用 Floating
+              UI（MIT）；标题字体 Baloo 2 来自 Google Fonts（OFL）。版式与
+              类型色设计语言参考开源图鉴项目（MIT）；未使用任何宝可梦官方素材。
+            </footer>
           </>
         )}
       </main>
 
       {/* ── 桌面端详情卡：顶层 portal 渲染，压在所有卡片（含闪箔动画层）之上 ── */}
-      {activeProvider && activeAnchor && activeKey ? (
+      {activeProvider && activeEl && activeKey ? (
         <AnchoredDetail
           key={activeKey}
           p={activeProvider}
           dexNo={dexNoById.get(activeProvider.id)}
-          rect={activeAnchor}
-          side={activeKey.startsWith("f:") ? "right" : "below"}
+          noClaimEnabled={authorBoard}
+          anchorEl={activeEl}
           onHoverStart={cancelClose}
           onHoverEnd={popoverHoverEnd}
         />
@@ -1358,6 +1373,7 @@ export function App() {
             <DetailCard
               p={pinned}
               dexNo={dexNoById.get(pinned.id)}
+              noClaimEnabled={authorBoard}
               onClose={() => setPinnedKey(null)}
             />
           </div>

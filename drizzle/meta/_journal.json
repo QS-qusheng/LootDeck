@@ -36,6 +36,13 @@
       "when": 1794743280181,
       "tag": "0005_add_gateway_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794886459719,
+      "tag": "0006_add_settings_table",
+      "breakpoints": true
     }
   ]
 }

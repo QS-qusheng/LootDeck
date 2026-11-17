@@ -1,4 +1,4 @@
-import { defineAction, z, type ActionsModule } from "@hatch/space-sdk";
+import { defineAction, z, type ActionsModule, type Ctx } from "@hatch/space-sdk";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "./schema";
 
@@ -28,6 +28,9 @@ const providerShape = z.object({
   sortValue: z.number(),
   featuredRank: z.number(),
   builtin: z.boolean(),
+  // 示例专属条目（作者本人的服务器卡）：只在示例状态下入账展示；用户
+  // 翻转到自己的状态时删除，自己的看板里永不混入
+  demoOnly: z.boolean(),
   status: statusEnum,
   taskCycle: taskCycleEnum,
   taskLastDoneAt: z.number().nullable(),
@@ -63,6 +66,7 @@ function toProvider(
     sortValue: row.sortValue,
     featuredRank: row.featuredRank,
     builtin: CATALOG_NAMES.has(row.name),
+    demoOnly: DEMO_ONLY_NAMES.has(row.name),
     status: row.status,
     taskCycle: row.taskCycle,
     taskLastDoneAt: row.taskLastDoneAt ? row.taskLastDoneAt.getTime() : null,
@@ -75,7 +79,7 @@ function toProvider(
   };
 }
 
-// ── 全量目录（来源：AIHOT 免费 Token 页 aihot.news/free-tokens，2026-11-15 当日卡片中可入池者，数据由派工方核实后喂入；2026-11-15 按用户拍板删减至 25 家：非 API 调度且无实际用途的工具福利 11 家与产品内羊毛整区 19 家已下架，见 REMOVED_NAMES；其后提效工具补入 MarkItDown / 共享记忆库 / 本地语音三件已装装备；2026-11-15 再补 8 家（API：Groq / Google Gemini API / 智谱 BigModel / Mistral / NVIDIA Build；免费VPS：Google Cloud / Microsoft Azure / AWS），现共 36 家）
+// ── 全量目录（来源：AIHOT 免费 Token 页 aihot.news/free-tokens，2026-11-15 当日卡片中可入池者，数据由派工方核实后喂入；2026-11-15 按用户拍板删减至 25 家：非 API 调度且无实际用途的工具福利 11 家与产品内羊毛整区 19 家已下架，见 REMOVED_NAMES；其后提效工具补入 MarkItDown / 共享记忆库 / 本地语音三件已装装备；2026-11-15 再补 8 家（API：Groq / Google Gemini API / 智谱 BigModel / Mistral / NVIDIA Build；免费VPS：Google Cloud / Microsoft Azure / AWS）；其后补入已装提效工具 Scrapling；2026-11-17 目录去重（同名重复条目合并为一条）后共 39 家，其中两张为示例专属服务器卡（demoOnly，只在示例状态出现）
 // group: api=API 能打水 / tool=工具福利 / compute=免费算力 / efficiency=提效工具
 // sortValue: 基础量（每日刷新型=日量、其余=面值/总量）；入库时经 effectiveValue 换算成
 //   「实际可用价值」再存：每日 ×30（30 天累计）、每周 ×30/7、代金券 ×0.5（有门槛和范围限制）、
@@ -97,6 +101,12 @@ type CatalogEntry = {
   featuredRank?: number;
   litStatus?: "pooled" | "registered";
   note?: string;
+  // 示例专属：作者本人的服务器卡，只在示例状态入账；用户自己的状态里不出现
+  demoOnly?: boolean;
+  // 用户自己的状态下用的公开版文案（目录原文可能含作者本人的持有状态
+  // 口径；新用户还没领，详情里要换成中性说法）
+  publicQuota?: string;
+  publicContent?: string;
   // 定期任务：周期 + 种子上次完成日（YYYY-MM-DD）；仅在台账从未配置过时应用一次
   taskCycle?: "daily" | "weekly" | "monthly";
   taskSeedDoneDay?: string;
@@ -123,29 +133,30 @@ const CATALOG: CatalogEntry[] = [
   { name: "agent-browser", nameEn: "agent-browser", backer: "开源工具", quota: "替你批量点网页、填表", content: "替你打开网页、点按钮、填表和抓内容，批量网页活交给它。已装好，可随时用；连接中断会自动重启，不用手动处理。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 500 },
   { name: "agent-desktop", nameEn: "agent-desktop", backer: "开源工具", quota: "替你操作电脑里的软件", content: "替你在 Windows 电脑上点软件按钮、切窗口、看截图。重点是能操作那些不能靠输指令控制的软件；已装好，已在电脑上实测通过。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 400 },
   { name: "Agent Reach", nameEn: "Agent Reach", backer: "开源工具", quota: "免登录搜网页、看视频内容", content: "免登录搜读 GitHub、YouTube、B 站、V2EX 和普通网页，找资料、看视频内容更省事。这五个渠道都实测拿到了内容，已装好，可随时用。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 300 },
+  { name: "Scrapling", nameEn: "Scrapling", backer: "开源工具", quota: "专啃难抓的网页：指纹抓取、改版自适应", content: "开源网页抓取工具：带浏览器指纹伪装抓页面，网站改版后能靠元素指纹自己重新定位、不用重写抓法。已装好并实测：公开商店站抓取成功、自适应重定位验过；需要真浏览器渲染的活仍走 agent-browser。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 250 },
   { name: "new-api", nameEn: "new-api", backer: "开源项目（AGPL）", quota: "各家模型统一入口、记用量", content: "把各家模型接到一个入口，按优先级调用，失败自动换一家，并记录各家用量。已装好；只需加上“快过期先用”的规则，以后补给泵图再接真实用量。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 200 },
   { name: "Codex", nameEn: "Codex", backer: "OpenAI", quota: "替你写代码、改项目", content: "在本机替你写代码、改项目、检查能否打包运行。已装好，用你亲自登录的 Pro 账号；你定要求、验结果，它负责写。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 150 },
   { name: "MarkItDown", nameEn: "MarkItDown", backer: "微软（开源）", quota: "把 PDF、Word、PPT 转成干净文本喂给 AI", content: "微软开源的文件转换工具，PDF、Word、PPT、Excel 都能一键转成干净的 Markdown 文本，AI 直接就能读。本机已装好并实测转换成功，带 MCP 接口，随叫随用。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 140 },
   { name: "共享记忆库", nameEn: "mcp-memory-service", backer: "开源项目", quota: "给所有 AI 装的共同记忆，学到的事互通", content: "开源的共享记忆服务，装在本机、数据不出门。各个 AI 学到的事存进同一个库，换个 AI 也记得。已装好，存入和语义召回都实测通过。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 130 },
-  { name: "本地语音", nameEn: "FunASR + Kokoro", backer: "开源工具", quota: "免费的耳朵和嘴：听写和朗读都在本机", content: "本地语音两件套：FunASR 把语音转成文字，Kokoro 把文字读出声，都在本机跑、不花钱不限量。合成→识别闭环已实测逐字对上。Kokoro 是预置女声，当随身嘴用，不替代定版配音。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 120 },
+  { name: "本地语音", nameEn: "FunASR + Kokoro", backer: "开源工具", quota: "免费的耳朵和嘴：听写和朗读都在本机", content: "本地语音两件套：FunASR 把语音转成文字，Kokoro 把文字读出声，都在本机跑、不花钱不限量。合成→识别闭环已实测逐字对上。", cycle: "长期（已装好，随时调用）", group: "efficiency", sortValue: 120 },
   // ── API 能打水 ──────────────────────────────────────────────
   { name: "火山方舟", nameEn: "Volcano Ark", backer: "字节跳动", quota: "试用各家模型，不用领", content: "可分别试用平台上的模型，比较哪种适合你的活。每个模型一次性有 50 万 Token（按处理文字量计的额度），注册即有，不用另领。", cycle: "一次性", group: "api", sortValue: 500000, featuredRank: 2 },
   { name: "Cloudflare Workers AI", nameEn: "Cloudflare Workers AI", backer: "Cloudflare（美国）", quota: "每天免费用模型处理任务", content: "可每天免费调用模型处理任务。每天给 10,000 Neurons（用量单位），约够小模型几百次、70B 级大模型 100 次；UTC 00:00 刷新，不累积。", cycle: "每日（00:00 UTC 刷新，不滚存）", group: "api", sortValue: 10000, valueKind: "daily", featuredRank: 3 },
   { name: "Reducto", nameEn: "Reducto", backer: "Reducto（美国）", quota: "试用工具，具体用途待确认", content: "可用额度试用 Reducto 工具，具体功能原文没写。一次性额度约 ¥1001。", cycle: "一次性", group: "tool", sortValue: 1001 },
-  { name: "阿里云新人礼包", nameEn: "", backer: "阿里巴巴", quota: "老号领不了，只限新人", content: "仅限新人的礼包，老号领不了。礼包为一次性 ¥300。", cycle: "一次性", group: "api", sortValue: 300 },
+  { name: "阿里云新人礼包", nameEn: "", backer: "阿里巴巴", quota: "新人礼包 ¥300（仅限新用户）", content: "仅限新注册用户的一次性 ¥300 礼包，老号领不了。", cycle: "一次性", group: "api", sortValue: 300 },
   { name: "魔搭社区", nameEn: "ModelScope", backer: "阿里巴巴 / 阿里云", quota: "每天领点数，用来调用模型", content: "可每天领点数来调用模型。每天共 250 魔粒（调用点数）：登录领 200，绑定阿里云再得 50；每次约扣 0.5／1／2 魔粒，当天过期，不累积。", cycle: "每日（当天过期，不攒）", group: "api", sortValue: 250, valueKind: "daily", featuredRank: 4 },
   { name: "超算互联网", nameEn: "", backer: "超算互联网", quota: "新人额度 · 待核实", content: "官方现行新人权益主要是 Token 量包（API 线），服务器/算力券的 ¥60、¥6 两笔旧记录未在官网核到，先标待核实；领取需本人实名（可能要人脸验证）。", cycle: "一次性", group: "compute", sortValue: 60 },
   { name: "OpenRouter", nameEn: "OpenRouter", backer: "OpenRouter（美国）", quota: "每天免费调用模型", content: "可调用标着 :free 的免费模型来处理任务。每天 50 次，每分钟 20 次；一次性买过至少 $10 额度后，升到每天 1,000 次。", cycle: "每日", group: "api", sortValue: 50, valueKind: "daily", featuredRank: 5 },
   { name: "百度智能云", nameEn: "", backer: "百度", quota: "用券抵百度智能云费用", content: "可用代金券抵用百度智能云费用，具体适用范围原文没写。一次性给 ¥20 代金券。", cycle: "一次性", group: "api", sortValue: 20, valueKind: "voucher", featuredRank: 8 },
   { name: "硅基流动", nameEn: "SiliconFlow", backer: "硅基流动（国产独立厂商）", quota: "免费用小模型，新人另有赠金", content: "可长期免费调用部分小模型，但调用速度有限制。国内站新用户另有 ¥16 赠金；免费模型每次调用为 ¥0。", cycle: "长期免费档", group: "api", sortValue: 16, valueKind: "free", featuredRank: 6 },
   { name: "硅基流动新人赠金", nameEn: "", backer: "硅基流动", quota: "用新人赠金试模型", content: "可用新人赠金试用模型，国内站新用户一次性获赠 ¥16。这张卡已入池，与已点亮的“硅基流动”是同一家、不同卡，原文未说明赠金能否重复领取。", cycle: "一次性", group: "api", sortValue: 16 },
-  { name: "阿里云百炼", nameEn: "", backer: "阿里巴巴", quota: "老号领不了，只限新人", content: "仅限新人的试用额度，老号领不了。一次性新人额度约 ¥7 起。", cycle: "一次性", group: "api", sortValue: 7 },
+  { name: "阿里云百炼", nameEn: "", backer: "阿里巴巴", quota: "新人试用额度（仅限新用户）", content: "新人试用额度约 ¥7 起，仅限新用户，老号领不了。", cycle: "一次性", group: "api", sortValue: 7 },
   { name: "超算互联网小额", nameEn: "", backer: "超算互联网", quota: "新人额度 · 待核实", content: "官方现行新人权益主要是 Token 量包（API 线），服务器/算力券的 ¥60、¥6 两笔旧记录未在官网核到，先标待核实；领取需本人实名（可能要人脸验证）。", cycle: "一次性", group: "compute", sortValue: 6 },
   { name: "DeepSeek", nameEn: "DeepSeek", backer: "深度求索", quota: "用赠金试用模型", content: "可用赠金试用 DeepSeek 模型。一次性赠金 ¥6。", cycle: "一次性", group: "api", sortValue: 6, featuredRank: 7 },
   { name: "蚂蚁灵波", nameEn: "", backer: "蚂蚁集团", quota: "免费试用，具体功能待确认", content: "可免费试用蚂蚁灵波，具体能做什么原文没写。这项福利标为长期，未写额度上限。", cycle: "长期", group: "api", sortValue: 1 },
   { name: "阶跃星辰 StepFun", nameEn: "StepFun", backer: "阶跃星辰", quota: "免费试用模型", content: "可免费试用阶跃星辰的模型。这项福利标为长期，未写可用模型名单或额度上限。", cycle: "长期", group: "api", sortValue: 1 },
-  { name: "Groq", nameEn: "Groq", backer: "Groq（美国）", quota: "长期免费层，每天 1000 次请求起，免绑卡", content: "可长期免费调用 Groq 上的开源模型处理任务。每天 1000 次请求起，免绑卡；注册后在控制台自建 API key 即可。", cycle: "长期免费层", group: "api", sortValue: 1000, valueKind: "daily" },
-  { name: "Google Gemini API", nameEn: "Google Gemini API", backer: "Google", quota: "Gemini Flash 免费层，Google 号直接调", content: "用 Google 账号即可调用 Gemini Flash 模型处理任务，走免费层，不用另外注册。", cycle: "长期免费层", group: "api", sortValue: 1 },
+  { name: "Groq", nameEn: "Groq", backer: "Groq（美国）", quota: "长期免费层，每天 1000 次请求起，免绑卡", content: "可长期免费调用 Groq 上的开源模型处理任务。每天 1000 次请求起，免绑卡；注册后拿 key 即可调用。", cycle: "长期免费层", group: "api", sortValue: 1000, valueKind: "daily" },
+  { name: "Google Gemini API", nameEn: "Google Gemini API", backer: "Google", quota: "Gemini Flash 免费层，Google 号直接调", content: "可用现成的 Google 账号直接调用 Gemini Flash 模型处理任务，走免费层，不用另外注册。", cycle: "长期免费层", group: "api", sortValue: 1 },
   { name: "智谱 BigModel", nameEn: "BigModel", backer: "智谱 AI", quota: "GLM Flash 长期免费，实名再送 2000 万 tokens", content: "可长期免费用 GLM Flash 模型处理任务；完成实名再送 2000 万 tokens。", cycle: "长期", group: "api", sortValue: 20000000 },
   { name: "Mistral", nameEn: "Mistral AI", backer: "Mistral AI（法国）", quota: "全系模型免费试，手机验证即可", content: "可免费试用 Mistral 全系模型，手机验证一下就能开通。", cycle: "长期", group: "api", sortValue: 1 },
   { name: "NVIDIA Build", nameEn: "NVIDIA Build", backer: "NVIDIA 英伟达", quota: "100 多个模型，新号约 1000 credits", content: "可试用 100 多个模型；新号约送 1000 credits，还能申请到 5000。", cycle: "一次性", group: "api", sortValue: 1000 },
@@ -155,16 +166,173 @@ const CATALOG: CatalogEntry[] = [
   { name: "GitHub Models", nameEn: "GitHub Models", backer: "微软 / GitHub", quota: "免费试用开发工具里的模型", content: "可在开发工具中免费试用模型。这项福利标为长期，原文未写可用模型名单或额度上限。", cycle: "长期", group: "tool", sortValue: 1 },
 
   // ── 免费算力 ────────────────────────────────────────────────
-  { name: "Kaggle", nameEn: "Kaggle", backer: "Google", quota: "借云端显卡批量跑计算", content: "可在云端运行代码，借显卡批量跑计算。每周约 30 小时，配两块 Tesla T4 显卡，周六刷新。", cycle: "每周（周六刷新）", group: "compute", sortValue: 30, valueKind: "weekly", featuredRank: 1 },
+  { name: "Kaggle", nameEn: "Kaggle", backer: "Google", quota: "借云端显卡批量跑计算", content: "可在云端运行代码，借显卡批量跑计算。每周约 30 小时，配两块 Tesla T4 显卡，周六刷新；会话制，闲置会断、文件不保存。", cycle: "每周（周六刷新）", group: "compute", sortValue: 30, valueKind: "weekly", featuredRank: 1 },
   { name: "甲骨文 Oracle", nameEn: "Oracle Cloud", backer: "Oracle 甲骨文", quota: "永久免费服务器", content: "注册审核较严，被拒后建议冷却一段时间再试。到手就是一台常驻的免费服务器（约 2 核 12G），能长期挂服务。", cycle: "永久免费（Always Free）", group: "compute", sortValue: 100 },
   { name: "GitHub Codespaces", nameEn: "GitHub Codespaces", backer: "GitHub", quota: "每月 60 小时开发机", content: "GitHub 账号自带的云端开发机，每月 120 核时（2 核机约 60 小时），每月刷新。会话制：闲置约 30 分钟自动停，文件保留。", cycle: "每月刷新", group: "compute", sortValue: 90 },
   { name: "Google Colab", nameEn: "Google Colab", backer: "Google", quota: "免费 T4 显卡 · 单次约 12 小时", content: "免费的云端 GPU 笔记本，救急跑批用。单次最长约 12 小时，闲置会断、东西不保存；还没接管，要用时现开。", cycle: "按次（会话制）", group: "compute", sortValue: 24 },
-  { name: "Google Cloud", nameEn: "Google Cloud", backer: "Google", quota: "$300 试用赠金，外加 e2-micro 永久免费", content: "新账号可领 $300 试用赠金（有效期以官方为准），另有一台 e2-micro 永久免费小机器可以长期挂服务。", cycle: "一次性（赠金有效期以官方为准）+ e2-micro 永久免费", group: "compute", sortValue: 300 },
+  { name: "Google Cloud", nameEn: "Google Cloud", backer: "Google", quota: "$300 试用赠金 + e2-micro 永久免费", content: "新账号可领 $300 试用赠金（有到期日），另有一台 e2-micro 永久免费小机器可以长期挂服务。", cycle: "一次性（赠金有效期以官方为准）+ e2-micro 永久免费", group: "compute", sortValue: 300 },
   { name: "Microsoft Azure", nameEn: "Microsoft Azure", backer: "微软 Microsoft", quota: "$200 额度 30 天 + 小 VM 每月 750 小时连免 12 个月", content: "可领 $200 额度先用 30 天，还有一台小 VM 每月 750 小时、连着免费用 12 个月；要注册绑卡才能领。", cycle: "一次性（$200 / 30 天）+ 12 个月免费 VM", group: "compute", sortValue: 200 },
-  { name: "AWS", nameEn: "Amazon Web Services", backer: "亚马逊 AWS", quota: "免费计划 $100 + 任务再送 $100", content: "可领免费计划的 $100 额度，做完任务再送 $100；要注册绑卡才能领。", cycle: "一次性", group: "compute", sortValue: 200 },
+  { name: "AWS", nameEn: "Amazon Web Services", backer: "亚马逊 AWS", quota: "免费计划 $100 + 做任务再送 $100", content: "新版免费计划：注册先到 $100，再在控制台完成 6 个新手任务（每个 $20）共 $200；免费计划 6 个月。开服务器选免费计划支持的机型（如 t4g.small，约 $12/月），不要点付费升级。", cycle: "一次性（免费计划 6 个月）", group: "compute", sortValue: 200 },
+  { name: "示例云电脑", nameEn: "Example Cloud PC", backer: "示例", quota: "示例数据：一台免费云电脑", content: "这是一张示例专属卡，只在示例状态下出现，用来演示示例数据与你自己的数据如何区分：当你添置第一件自己的战利品、看板翻转到你自己的状态时，它会随示例清场一起消失，不会混进你的看板。", cycle: "长期", group: "compute", sortValue: 110, demoOnly: true },
+  { name: "示例海外服务器", nameEn: "Example VPS", backer: "示例", quota: "示例数据：一台海外小服务器", content: "这是一张示例专属卡，只在示例状态下出现，用来演示示例数据与你自己的数据如何区分：当你添置第一件自己的战利品、看板翻转到你自己的状态时，它会随示例清场一起消失，不会混进你的看板。", cycle: "长期", group: "compute", sortValue: 105, demoOnly: true },
+];
+
+// ── 补给泵图服务器层（只存服务端，经动作下发） ──────────────────
+// 这排节点不进客户端代码：仅经 getPumpServers 动作下发，且只在看板
+// 为本人状态（own）时返回；示例状态返回空数组，客户端改画虚构示例
+// 节点。本发布版内置的是虚构示例清单，换成你自己的服务器时改这一处。
+const pumpServerShape = z.object({
+  name: z.string(),
+  sub: z.string(),
+  tags: z.array(z.string()),
+  status: z.array(
+    z.object({
+      text: z.string(),
+      tone: z.enum(["ok", "due", "warn", "muted"]),
+    }),
+  ),
+});
+type PumpServer = z.infer<typeof pumpServerShape>;
+
+const PUMP_SERVERS: PumpServer[] = [
+  {
+    name: "腾讯云 · 云服务器",
+    sub: "云服务器",
+    tags: ["业务站点", "数据处理"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "到期日未登记", tone: "muted" },
+    ],
+  },
+  {
+    name: "香港 · 云服务器",
+    sub: "云服务器",
+    tags: ["应用服务"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "到期日未登记", tone: "muted" },
+    ],
+  },
+  {
+    name: "Kaggle · 免费 GPU",
+    sub: "每周约 30 小时 T4 x2",
+    tags: ["GPU 跑批"],
+    status: [
+      { text: "可用", tone: "ok" },
+      { text: "每周六刷新额度", tone: "due" },
+      { text: "会话制 · 闲置会断", tone: "warn" },
+    ],
+  },
+  {
+    name: "GitHub Codespaces",
+    sub: "开发机 · 每月 60 小时",
+    tags: ["云端开发"],
+    status: [
+      { text: "可用", tone: "ok" },
+      { text: "每月刷新", tone: "due" },
+      { text: "闲置约 30 分钟自动停", tone: "warn" },
+    ],
+  },
+  {
+    name: "云电脑（示例）",
+    sub: "免费云电脑 · 示例",
+    tags: ["远程桌面"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "限时免费 · 无固定到期日", tone: "due" },
+      { text: "闲置可能被平台回收", tone: "warn" },
+    ],
+  },
+  {
+    name: "海外云服务器（示例）",
+    sub: "海外小服务器 · 示例",
+    tags: ["网络出口"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "试用赠金期内", tone: "due" },
+      { text: "临时 IP · 重启可能变", tone: "warn" },
+    ],
+  },
+  {
+    name: "云服务器（示例）",
+    sub: "免费计划小服务器 · 示例",
+    tags: ["常驻服务"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "固定 IP", tone: "muted" },
+      { text: "免费计划期内", tone: "due" },
+      { text: "期后需绑卡续用", tone: "warn" },
+    ],
+  },
 ];
 
 const CATALOG_NAMES = new Set(CATALOG.map((e) => e.name));
+const CATALOG_BY_NAME = new Map(CATALOG.map((e) => [e.name, e]));
+const DEMO_ONLY_NAMES = new Set(
+  CATALOG.filter((e) => e.demoOnly).map((e) => e.name),
+);
+
+// ── 看板状态（示例 / 本人） ─────────────────────────────────────────
+// board_mode 存 settings 表：example＝示例状态（用户还没添置任何自己的
+// 战利品，甲板展示内置示例数据，页面明确标注示例）；own＝用户自己的
+// 状态。迁移 0006 按存量定初始值（已有台账数据＝own，全新安装＝example），
+// settings 里没有这条时按 example 处理（全新安装口径）。
+async function getBoardMode(ctx: Ctx): Promise<"example" | "own"> {
+  const db = ctx.db<typeof schema>();
+  const rows = await db
+    .select()
+    .from(schema.settings)
+    .where(eq(schema.settings.key, "board_mode"))
+    .limit(1);
+  return rows[0]?.value === "own" ? "own" : "example";
+}
+
+// 示例状态 → 用户自己的状态（自动翻转，用户添置第一件自己的战利品时触发）：
+// keepId 是用户刚动手的那一行——先标 owned 再清场，清场不动 owned 行；
+// 其余行里示例专属条目（作者的服务器卡）直接删除，普通目录条目把示例
+// 状态复位（点亮→未点亮、清 key 尾号/备注/定期任务记录，带公开版文案的
+// 换成公开版），只剩一张干净的待领取目录 + 用户自己的那件。
+async function flipToOwn(ctx: Ctx, keepId?: number): Promise<boolean> {
+  const db = ctx.db<typeof schema>();
+  if ((await getBoardMode(ctx)) !== "example") return false;
+  if (keepId != null) {
+    await db
+      .update(schema.providers)
+      .set({ owned: 1 })
+      .where(eq(schema.providers.id, keepId));
+  }
+  const rows = await db.select().from(schema.providers);
+  for (const r of rows) {
+    if (r.owned === 1) continue;
+    if (DEMO_ONLY_NAMES.has(r.name)) {
+      await db
+        .delete(schema.providers)
+        .where(eq(schema.providers.id, r.id));
+      continue;
+    }
+    const e = CATALOG_BY_NAME.get(r.name);
+    await db
+      .update(schema.providers)
+      .set({
+        status: "unclaimed",
+        keyTail: "",
+        note: "",
+        taskCycle: "none",
+        taskLastDoneAt: null,
+        ...(e?.publicQuota ? { quotaText: e.publicQuota } : {}),
+        ...(e?.publicContent ? { dailyDetail: e.publicContent } : {}),
+      })
+      .where(eq(schema.providers.id, r.id));
+  }
+  await db
+    .insert(schema.settings)
+    .values({ key: "board_mode", value: "own" })
+    .onConflictDoUpdate({
+      target: schema.settings.key,
+      set: { value: "own" },
+    });
+  return true;
+}
 
 // ── 已下架名单（用户 2026-11-15 拍板）：非 API 调度、且对他没实际用途的条目——
 // 别家编程工具的产品内积分（他用 Codex/Muse）与只能在对方产品里花的产品内
@@ -207,7 +375,7 @@ const REMOVED_NAMES = new Set([
 const SEED: Array<
   Omit<
     ProviderRow,
-    "id" | "createdAt" | "backer" | "groupKey" | "sortValue" | "featuredRank"
+    "id" | "createdAt" | "backer" | "groupKey" | "sortValue" | "featuredRank" | "owned"
   >
 > = [
   {
@@ -299,9 +467,12 @@ const SEED: Array<
 
 export const Actions = {
   listProviders: defineAction({
-    description: "列出 Token 池台账里的全部提供方，按台账顺序排列。",
+    description: "列出 Token 池台账里的全部提供方，按台账顺序排列；同时返回看板状态 boardMode（example＝示例状态，甲板展示的是内置示例数据；own＝用户自己的状态）。",
     request: z.object({}),
-    response: z.object({ providers: z.array(providerShape) }),
+    response: z.object({
+      providers: z.array(providerShape),
+      boardMode: z.enum(["example", "own"]),
+    }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
       const rows = await db
@@ -312,7 +483,21 @@ export const Actions = {
       const statByName = new Map(stats.map((s) => [s.providerName, s]));
       return {
         providers: rows.map((r) => toProvider(r, statByName.get(r.name))),
+        boardMode: await getBoardMode(ctx),
       };
+    },
+  }),
+
+  getPumpServers: defineAction({
+    description:
+      "返回补给泵图上方服务器层的数据：仅当看板为本人状态（own）时返回服务端内置的服务器清单；示例状态返回空数组（客户端改画虚构示例节点，清单不下发）。",
+    request: z.object({}),
+    response: z.object({
+      servers: z.array(pumpServerShape),
+    }),
+    handler: async (ctx): Promise<{ servers: PumpServer[] }> => {
+      const mode = await getBoardMode(ctx);
+      return { servers: mode === "own" ? PUMP_SERVERS : [] };
     },
   }),
 
@@ -334,7 +519,7 @@ export const Actions = {
 
   syncCatalog: defineAction({
     description:
-      "把全量目录（36 家）同步进台账：先删下架名单里的行（非 API 调度且无实际用途的工具福利与产品内羊毛整区），再按名称去重（同名多行只保留带用户数据最多的一行，其余删除）；缺的按名补入，同名已存在绝不重复插入；已有的只补结构字段（分类/排序值/推荐位，其中排序值按实际可用价值换算：每日刷新×30、每周×30/7、代金券×0.5、免费不限量按附带赠金算），首次同步时对齐目录文案、背后企业与已点亮状态，绝不覆盖 key 尾号、备注和用户改过的状态。",
+      "把全量目录（39 家）同步进台账：先删下架名单里的行（非 API 调度且无实际用途的工具福利与产品内羊毛整区），再按名称去重（同名多行只保留带用户数据最多的一行，其余删除）；缺的按名补入，同名已存在绝不重复插入；已有的只补结构字段（分类/排序值/推荐位，其中排序值按实际可用价值换算：每日刷新×30、每周×30/7、代金券×0.5、免费不限量按附带赠金算）。看板状态决定示例层：示例状态（example）下目录的已点亮状态、示例备注、定期任务种子与示例专属条目（作者本人的服务器卡）一并入账，拼出完整的示例看板；用户自己的状态（own）下只入目录本体——全部未点亮、不带示例备注、文案用公开版、示例专属条目不入账，已有行也不再被示例层触碰。绝不覆盖 key 尾号和用户改过的状态。",
     request: z.object({}),
     response: z.object({
       inserted: z.number(),
@@ -383,30 +568,36 @@ export const Actions = {
             .where(eq(schema.providers.id, dup.id));
         }
       }
+      const mode = await getBoardMode(ctx);
       const byName = new Map(rows.map((r) => [r.name, r]));
       let maxOrder = rows.reduce((m, r) => Math.max(m, r.sortOrder), 0);
       let inserted = 0;
       let updated = 0;
       for (const e of CATALOG) {
+        // 示例专属条目（作者本人的服务器卡）：只在示例状态入账；
+        // 用户自己的状态里不插入，已有的（作者本人实例）也原样不动
+        if (e.demoOnly && mode !== "example") continue;
+        // 文案按看板状态取版：示例状态用目录原文（作者口径），
+        // 用户自己的状态用公开版（没有公开版的条目两版同文）
+        const quota = mode === "example" ? e.quota : (e.publicQuota ?? e.quota);
+        const content =
+          mode === "example" ? e.content : (e.publicContent ?? e.content);
         const ex = byName.get(e.name);
         if (ex) {
           const patch: Partial<ProviderRow> = {
             groupKey: e.group,
             sortValue: effectiveValue(e),
             featuredRank: e.featuredRank ?? 0,
-            // 文案以目录为准（简介重写靠此全站生效）：只对齐额度文案与
-            // 羊毛内容两项，不碰备注、key 尾号、状态与定期任务记录
-            quotaText: e.quota,
-            dailyDetail: e.content,
           };
-          // 目录备注只在台账备注还空着时补入，不覆盖用户写过的备注
-          if (e.note && ex.note === "") {
+          // 目录备注（示例数据的一部分）：只在示例状态、且台账备注还空着
+          // 时补入，不覆盖用户写过的备注
+          if (mode === "example" && e.note && ex.note === "") {
             patch.note = e.note;
           }
           // 状态用语收口：早期种子/目录写过的「已在册」原文改为两档口径；
           // 只命中系统写过的原文，用户自己改过的文案不动
           if (ex.dailyDetail.includes("已在册")) {
-            patch.dailyDetail = e.content;
+            patch.dailyDetail = content;
           }
           if (ex.note === "已在册，不用领") {
             patch.note = "不用领，额度已到手";
@@ -414,22 +605,41 @@ export const Actions = {
           if (ex.conditionText === "已在册") {
             patch.conditionText = "不用领";
           }
-          // 定期任务种子：仅在台账从未配置过（周期为无、且无完成记录）时应用一次；
-          // 之后以 completeTask 打卡和用户设置为准，同步不再覆盖
-          if (e.taskCycle && ex.taskCycle === "none" && ex.taskLastDoneAt == null) {
+          // 定期任务种子（示例数据的一部分）：仅示例状态、且台账从未
+          // 配置过（周期为无、且无完成记录）时应用一次；之后以
+          // completeTask 打卡和用户设置为准，同步不再覆盖
+          if (
+            mode === "example" &&
+            e.taskCycle &&
+            ex.taskCycle === "none" &&
+            ex.taskLastDoneAt == null
+          ) {
             patch.taskCycle = e.taskCycle;
             if (e.taskSeedDoneDay) {
               patch.taskLastDoneAt = new Date(`${e.taskSeedDoneDay}T01:00:00Z`);
             }
           }
+          // 已到手补点亮（示例数据的一部分）：仅示例状态应用——目录标了
+          // litStatus、台账还停在未点亮两档（unclaimed / check_old）时按
+          // 目录点亮，拼出完整的示例看板。用户自己的状态下绝不替用户
+          // 点亮：他领没领只由他自己的记录说了算。
+          if (
+            mode === "example" &&
+            e.litStatus &&
+            (ex.status === "unclaimed" || ex.status === "check_old")
+          ) {
+            patch.status = e.litStatus;
+            patch.refreshRule = e.cycle;
+          }
           // 首次同步（backer 还空着）才对齐目录文案，之后尊重用户编辑
           if (ex.backer === "") {
             patch.backer = e.backer;
             patch.nameEn = e.nameEn || ex.nameEn;
-            patch.quotaText = e.quota;
-            patch.dailyDetail = e.content;
+            patch.quotaText = quota;
+            patch.dailyDetail = content;
             patch.refreshRule = e.cycle;
             if (
+              mode === "example" &&
               e.litStatus &&
               (ex.status === "unclaimed" || ex.status === "check_old")
             ) {
@@ -446,8 +656,8 @@ export const Actions = {
           await db.insert(schema.providers).values({
             name: e.name,
             nameEn: e.nameEn,
-            quotaText: e.quota,
-            dailyDetail: e.content,
+            quotaText: quota,
+            dailyDetail: content,
             refreshRule: e.cycle,
             rateLimit: "",
             models: "",
@@ -457,13 +667,14 @@ export const Actions = {
             groupKey: e.group,
             sortValue: effectiveValue(e),
             featuredRank: e.featuredRank ?? 0,
-            status: e.litStatus ?? "unclaimed",
-            taskCycle: e.taskCycle ?? "none",
-            taskLastDoneAt: e.taskSeedDoneDay
-              ? new Date(`${e.taskSeedDoneDay}T01:00:00Z`)
-              : null,
+            status: mode === "example" ? (e.litStatus ?? "unclaimed") : "unclaimed",
+            taskCycle: mode === "example" ? (e.taskCycle ?? "none") : "none",
+            taskLastDoneAt:
+              mode === "example" && e.taskSeedDoneDay
+                ? new Date(`${e.taskSeedDoneDay}T01:00:00Z`)
+                : null,
             keyTail: "",
-            note: e.note ?? "",
+            note: mode === "example" ? (e.note ?? "") : "",
             sortOrder: maxOrder,
           });
           inserted++;
@@ -475,7 +686,7 @@ export const Actions = {
   }),
 
   updateProvider: defineAction({
-    description: "更新一家的领取状态、key 尾号、备注及台账字段。",
+    description: "更新一家的领取状态、key 尾号、备注及台账字段。示例状态下调用＝用户开始添置自己的战利品：这一行标为用户所有，并自动翻转到用户自己的状态（示例数据清场）。",
     request: z.object({
       id: z.number().int().positive(),
       status: statusEnum.optional(),
@@ -495,6 +706,9 @@ export const Actions = {
     async handler(ctx, args): Promise<{ ok: true }> {
       const db = ctx.db<typeof schema>();
       const { id, ...patch } = args;
+      // 示例状态下亲手改一行＝添置自己的第一件战利品：先翻转清场
+      // （这一行标 owned 保留），再落用户的修改
+      await flipToOwn(ctx, id);
       const clean: Record<string, string> = {};
       for (const [k, v] of Object.entries(patch)) {
         if (typeof v === "string") clean[k] = v.trim();
@@ -512,7 +726,7 @@ export const Actions = {
 
   completeTask: defineAction({
     description:
-      "给一家的定期任务打卡：把上次完成时间记为现在，该家卡片上的待办红点随即熄灭（下个周期自动再亮）。按 id 或 name 指定一家，二选一。",
+      "给一家的定期任务打卡：把上次完成时间记为现在，该家卡片上的待办红点随即熄灭（下个周期自动再亮）。按 id 或 name 指定一家，二选一。示例状态下打卡＝这家已被用户实际领用，自动翻转到用户自己的状态（示例数据清场，这一行保留）。",
     request: z.object({
       id: z.number().int().positive().optional(),
       name: z.string().min(1).max(80).optional(),
@@ -543,6 +757,8 @@ export const Actions = {
             ? rows.find((r) => r.name === args.name)
             : undefined;
       if (!row) throw new Error("completeTask: 找不到这家提供方");
+      // 示例状态下打卡＝这家是用户自己的战利品：翻转清场，这行保留
+      await flipToOwn(ctx, row.id);
       const now = new Date();
       await db
         .update(schema.providers)
@@ -618,7 +834,7 @@ export const Actions = {
   }),
 
   addProvider: defineAction({
-    description: "往台账里新增一家提供方。",
+    description: "往台账里新增一家提供方（用户自己的战利品）。示例状态下新增＝自动翻转到用户自己的状态（示例数据清场）。",
     request: z.object({
       name: z.string().min(1).max(80),
       nameEn: z.string().max(80).default(""),
@@ -635,6 +851,8 @@ export const Actions = {
     response: z.object({ id: z.number() }),
     async handler(ctx, args) {
       const db = ctx.db<typeof schema>();
+      // 新增的必然是用户自己的战利品：示例状态下先翻转清场
+      await flipToOwn(ctx);
       const rows = await db.select().from(schema.providers);
       const maxOrder = rows.reduce((m, r) => Math.max(m, r.sortOrder), 0);
       const result = await db
@@ -656,6 +874,7 @@ export const Actions = {
           note: args.note.trim(),
           status: "unclaimed",
           keyTail: "",
+          owned: 1,
           sortOrder: maxOrder + 1,
         })
         .returning({ id: schema.providers.id });

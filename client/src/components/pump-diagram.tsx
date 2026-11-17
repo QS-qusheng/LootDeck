@@ -1,7 +1,11 @@
 /* ── 补给泵图：React Flow（@xyflow/react，MIT）本体渲染 ─────────────────
-   形态：三层——最上方一排四台服务器节点（两台云服务器 /
-   Kaggle · 免费 GPU / GitHub Codespaces · 开发机），中间居中「补给泵 · 网关」
-   节点，下方一排已点亮的水源节点。边从水源向上汇入泵，再从泵向上分供四台服务器。
+   形态：三层——最上方一排七台服务器节点（数据经 getPumpServers 动作
+   下发：本人状态为作者的真实服务器，示例状态为虚构示例节点），中间居中
+   「补给泵 · 网关」节点，下方一排已点亮的
+   水源节点。边从水源向上汇入泵，再从泵向上分供七台服务器。每台服务器
+   标签分工（2026-11-17 定版）：状态标签挂在节点上方（主机状态：绿
+   运行中 / 金到期日 / 红注意事项 / 灰未登记，七台全做），业务标签统一
+   放在节点下方（水蓝，这台在干的活）。
    水源数据全部来自台账（listProviders），不写死名单外数据：
    只取已点亮且在 PUMP_ORDER 名单内的 6 家，名称/额度文案取台账字段。
    水源从左到右按抽水优先级排列（PUMP_ORDER，序号徽章 1、2、3…）：
@@ -12,23 +16,22 @@
    边的粗细按每日量级相对缩放（映射表 PIPE 是展示口径，源自台账额度量级）；
    每日/每周刷新型用 React Flow 的 animated 边（流动虚线），一次性型用静态边。
    网关真实调用优先：台账带 gw* 统计（syncGatewayStats 写入）的渠道若近 7 天
-   有调用，边宽改按调用量分档、标签改显「近 7 天 N 次 · M tokens」；暂无真实
-   调用的渠道保留额度标签并加「（暂无调用）」，图头说明随之切换两行口径。
+   有调用，边宽改按调用量分档；使用情况不再做图上的浮动标签（沿连线飘着
+   对不上号、显乱），改在泵图正下方竖排成清单——按抽水优先级一行一家，
+   有真实调用的显「近 7 天 N 次 · M tokens」，暂无真实调用的保留额度文案
+   并注明「暂无调用」。
    居中适配：节点坐标是按全宽画布排的固定值，fitView 只在挂载时算一次——
    壳层先窄后宽、旋转屏幕、窗口改尺寸都会让初次 fit 的缩放/偏移过期，整图
    靠左、1 号节点被裁。故容器宽度一变（ResizeObserver）就重新 fitView 居中；
-   minZoom 放到 0.2，窄屏能把整排缩进画面完整居中（可再捏合放大/平移看）。 */
+   minZoom 放到 0.2，窄屏能把整排缩进画面完整居中。图面为只读展示：禁止
+   手动平移/缩放/拖拽，始终保持 fitView 的最佳居中状态。 */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
 Background,
 BackgroundVariant,
-BaseEdge,
-EdgeLabelRenderer,
 Position,
 ReactFlow,
-getBezierPath,
 type Edge,
-type EdgeProps,
 type Node,
 type ReactFlowInstance,
 } from "@xyflow/react";
@@ -71,84 +74,6 @@ function formatTokens(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-// ── 水源边标签错位排布 ──────────────────────────────────────────────
-// 六条水源边的中点横向只相隔约 93px，而标签宽 110–180px：默认全钉在
-// 中点必然挤成一长条、彼此贴死。改走自定义边：标签按序号在上/中/下
-// 三档纵向错开（相邻标签差 46px 以上，不相贴）、横向再微移就近贴边；
-// 「（暂无调用）」拆到标签第二行（data.sub），主行只留额度信息本身。
-// 标签经 EdgeLabelRenderer 渲染在最上层，带独立浅底衬 + 边框，与水柱分层。
-const LABEL_DY = [-48, -2, 44, -48, -2, 44];
-const LABEL_DX = [-12, 0, 10, -10, 0, 12];
-
-type PipeEdgeData = { dy?: number; dx?: number; sub?: string };
-type PipeEdgeType = Edge<PipeEdgeData, "pipe">;
-
-function PipeEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  style,
-  label,
-  data,
-}: EdgeProps<PipeEdgeType>) {
-  const [path, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  });
-  const dx = data?.dx ?? 0;
-  const dy = data?.dy ?? 0;
-  return (
-    <>
-      <BaseEdge path={path} style={style} />
-      {label != null && label !== "" ? (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: "absolute",
-              transform: `translate(-50%, -50%) translate(${labelX + dx}px, ${labelY + dy}px)`,
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              boxShadow: "0 1px 4px rgba(35, 40, 56, 0.14)",
-              padding: "3px 6px",
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: 1.3,
-              color: "var(--text)",
-              textAlign: "center",
-              maxWidth: 168,
-              pointerEvents: "none",
-            }}
-          >
-            <span style={{ display: "block" }}>{label}</span>
-            {data?.sub ? (
-              <span
-                style={{
-                  display: "block",
-                  fontSize: 10,
-                  fontWeight: 500,
-                  opacity: 0.72,
-                }}
-              >
-                {data.sub}
-              </span>
-            ) : null}
-          </div>
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
-  );
-}
-
-const EDGE_TYPES = { pipe: PipeEdge };
-
 // 抽水优先级（左→右，序号 1 起）：先烧快过期的
 const PUMP_ORDER = [
   "魔搭社区",
@@ -159,14 +84,103 @@ const PUMP_ORDER = [
   "火山方舟",
 ];
 
-// 网关上方四台服务器（水抽上来供它们用）：两台云服务器 + Kaggle 免费 GPU + Codespaces 开发机。
-// 名称与说明为示例配置（静态展示节点，不读台账），按你自己的服务器改。
-const SERVERS = [
-  { name: "腾讯云 · 云服务器", sub: "云服务器" },
-  { name: "香港 · 云服务器", sub: "云服务器" },
-  { name: "Kaggle · 免费 GPU", sub: "每周约 30 小时 T4 x2" },
-  { name: "GitHub Codespaces · 开发机", sub: "每月 60 小时 · 账号自带" },
+type ServerStatusTone = "ok" | "due" | "warn" | "muted";
+export type PumpServer = {
+  name: string;
+  sub: string;
+  tags: string[];
+  status: Array<{ text: string; tone: ServerStatusTone }>;
+};
+
+// 服务器层数据口径：作者本人的真实服务器清单只存服务端，经
+// getPumpServers 动作下发（仅本人状态 own 返回），不写进客户端代码。
+// 示例状态下服务端返回空数组，客户端改画下面这排虚构示例节点：
+// 两台云服务器 + Kaggle 免费 GPU + Codespaces 开发机 + 云电脑、海外
+// 服务器、免费计划小服务器三台示例节点，名称与说明均为虚构示例。
+// 呈现（定版）：状态收成一块统一面板挂在每台服务器节点上方（等高对齐
+// 成一条带，语义色只在行首小圆点上）、业务标签统一放在节点下方，一行
+// 一个、竖着排；到期日只写确切知道的，没有记录的如实标「到期日未登记」。
+const EXAMPLE_SERVERS: PumpServer[] = [
+  {
+    name: "腾讯云 · 云服务器",
+    sub: "云服务器",
+    tags: ["业务站点", "数据处理"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "到期日未登记", tone: "muted" },
+    ],
+  },
+  {
+    name: "香港 · 云服务器",
+    sub: "云服务器",
+    tags: ["应用服务"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "到期日未登记", tone: "muted" },
+    ],
+  },
+  {
+    name: "Kaggle · 免费 GPU",
+    sub: "每周约 30 小时 T4 x2",
+    tags: ["GPU 跑批"],
+    status: [
+      { text: "可用", tone: "ok" },
+      { text: "每周六刷新额度", tone: "due" },
+      { text: "会话制 · 闲置会断", tone: "warn" },
+    ],
+  },
+  {
+    name: "GitHub Codespaces",
+    sub: "开发机 · 每月 60 小时",
+    tags: ["云端开发"],
+    status: [
+      { text: "可用", tone: "ok" },
+      { text: "每月刷新", tone: "due" },
+      { text: "闲置约 30 分钟自动停", tone: "warn" },
+    ],
+  },
+  {
+    name: "云电脑（示例）",
+    sub: "免费云电脑 · 示例",
+    tags: ["远程桌面"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "限时免费 · 无固定到期日", tone: "due" },
+      { text: "闲置可能被平台回收", tone: "warn" },
+    ],
+  },
+  {
+    name: "海外云服务器（示例）",
+    sub: "海外小服务器 · 示例",
+    tags: ["网络出口"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "试用赠金期内", tone: "due" },
+      { text: "临时 IP · 重启可能变", tone: "warn" },
+    ],
+  },
+  {
+    name: "云服务器（示例）",
+    sub: "免费计划小服务器 · 示例",
+    tags: ["常驻服务"],
+    status: [
+      { text: "运行中", tone: "ok" },
+      { text: "固定 IP", tone: "muted" },
+      { text: "免费计划期内", tone: "due" },
+      { text: "期后需绑卡续用", tone: "warn" },
+    ],
+  },
 ];
+
+// 状态语义色（只用在面板内每行行首的小圆点上，面板底色统一半透明白、
+// 文字统一深灰蓝，克制用色、不再一台一堆彩色胶囊）：
+// ok 绿 / due 金 / warn 红 / muted 灰
+const STATUS_DOT: Record<ServerStatusTone, string> = {
+  ok: "#059669",
+  due: "#d9a521",
+  warn: "#e11d48",
+  muted: "#94a3b8",
+};
 
 // 这 6 家的品牌色块（与卡墙 BRAND 同色值，识别用）
 const PUMP_BRAND: Record<string, { bg: string; mark: string }> = {
@@ -182,39 +196,47 @@ function isLit(p: Provider): boolean {
   return p.status === "claimed" || p.status === "pooled" || p.status === "registered";
 }
 
-// 甲板主题浪花路径（纯 SVG 技法，本页自写）：120 单位一个完整波形、共 2880 宽，
-// 图层以 200% 宽横向平移半程（1440＝12 个波形）即无缝循环；CSS 动画在 theme.css。
-const WAVE_PATH = (() => {
-  let d = "M0 22 Q 30 8 60 22";
-  for (let x = 120; x <= 2880; x += 60) d += ` T ${x} 22`;
-  return `${d} L 2880 40 L 0 40 Z`;
-})();
-
 // 甲板主题水柱：边的柱体层 stroke 引用的竖向水蓝渐变（浅→深、自上而下）。
 // defs 由组件在开主题时渲染进面板（隐藏 svg），id 全页唯一。
 const WATER_GRAD_ID = "deck-water-grad";
 const WATER_STROKE = `url(#${WATER_GRAD_ID})`;
 
-// 甲板主题云朵：顶部服务器节点的云形底衬（本页自写 SVG 路径，data URI 背景，
-// 拉伸铺满节点；白云面 + 柔和水蓝描边，文字照常压在云面上清晰可读）。
-const CLOUD_SVG =
-  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 64' preserveAspectRatio='none'>" +
-  "<path d='M28 55C14 55 6 45 8 35C10 25 18 19 27 19C30 7 44 1 56 5C64 -3 84 -3 94 5C106 3 120 9 125 19C138 13 154 19 158 31C172 29 182 39 180 47C178 53 170 55 160 55Z' fill='#ffffff' stroke='#7cc3e8' stroke-width='2.5'/></svg>";
-const CLOUD_BG = `url("data:image/svg+xml,${encodeURIComponent(CLOUD_SVG)}")`;
+// 甲板主题云朵：云形直接采用 Font Awesome Free 的 cloud 图标轮廓（Fonticons,
+// Inc.；Icons: CC BY 4.0，https://fontawesome.com/license/free），路径逐字取自
+// @fortawesome/fontawesome-free 6.5.2 的 svgs/solid/cloud.svg 原文件、未改
+// 轮廓；只按甲板主题改填充（白面）、描边（水蓝）与尺寸（拉伸铺满节点）。
+// 选型实测（2026-11-17）：三款成熟云形（本款 / Material Design Icons cloud /
+// Ionicons cloud）同尺寸拉伸成宽云后逐像素比对轮廓内可容纳的居中文字区，
+// 本款最宽（248×84 时约 179px），标题＋副标题两行能完整落在轮廓内、
+// 四周留白均匀；节点内容再整体下沉/右移 4px，避开左上肩线。
+const CLOUD_PATH =
+  "M0 336c0 79.5 64.5 144 144 144H512c70.7 0 128-57.3 128-128c0-61.9-44-113.6-102.4-125.4c4.1-10.7 6.4-22.4 6.4-34.6c0-53-43-96-96-96c-19.7 0-38.1 6-53.3 16.2C367 64.2 315.3 32 256 32C167.6 32 96 103.6 96 192c0 2.7 .1 5.4 .2 8.1C40.2 219.8 0 273.2 0 336z";
 
 const NODE_W = 156;
 const GAP = 30;
 
 export function PumpDiagram({
   providers,
+  servers: serversProp,
   deck = false,
+  showServers = true,
+  isExample = false,
 }: {
   providers: Provider[];
-  // 甲板主题（清新版）：仅换皮——面板改海水渐变 + 底部两层 SVG 浪花、
+  // 本人状态的真实服务器清单（getPumpServers 动作下发，未加载完为空）
+  servers?: PumpServer[];
+  // 甲板主题（清新版）：仅换皮——面板改海水渐变 + 底部两层平铺浪花、
   // 连线改水柱（宽幅半透明水蓝渐变柱体 + 虚线流光，柱宽即流量分档）、
   // 顶部服务器节点改云朵形容器、水源节点小幅硬阴影浮标感、网关节点加
   // 船舵标、浅色模式；节点、数据、布局坐标与关闭时完全一致
   deck?: boolean;
+  // 服务器层显隐：只在示例状态或作者本人的看板里出现；新用户自己的
+  // 看板里不画这一层，泵与水源上移收紧，他点亮的水源照常汇入泵。
+  // 内容按状态分开：own（作者本人）画动作下发的真实服务器，示例状态
+  // 画 EXAMPLE_SERVERS 虚构示例，真实服务器信息不进示例展示
+  showServers?: boolean;
+  // 示例状态：图头挂「示例」标，免得被当成用户自己的服务器
+  isExample?: boolean;
 }) {
   const sources = useMemo(
     () =>
@@ -224,99 +246,242 @@ export function PumpDiagram({
     [providers],
   );
 
+  // 服务器层实际开关：要画这一层且已有节点数据（本人状态等动作下发，
+  // 示例状态用本地虚构集立即可用）
+  const servers = isExample ? EXAMPLE_SERVERS : (serversProp ?? []);
+  const layerOn = showServers && servers.length > 0;
+
   const { nodes, edges } = useMemo(() => {
     const totalW = sources.length * NODE_W + Math.max(0, sources.length - 1) * GAP;
     const pumpW = 224;
-    // 服务器节点加宽到 248：最长的「GitHub Codespaces · 开发机」单行完整
-    // 显示、不折行不溢出云形（相邻节点中心距约 271，互不重叠）
+    // 服务器节点宽 248、间距 10：七台一排总宽 1796，比水源排（1086）宽，
+    // 以整图中心对称排布（起始 x 为负，fitView 按全体节点取景）；248×84 的
+    // 云形（Font Awesome cloud 轮廓）经实测能把最长的标题＋副标题两行完整
+    // 包住、互不重叠。
     const srvW = 248;
-    const ns: Node[] = SERVERS.map((s, i) => ({
+    const srvGap = 10;
+    const srvStartX =
+      (totalW - (servers.length * srvW + (servers.length - 1) * srvGap)) / 2;
+    const ns: Node[] = !layerOn
+      ? []
+      : servers.map((s, i) => ({
       id: `srv-${i}`,
       type: "output" as const,
       targetPosition: Position.Bottom,
       position: {
-        x: (totalW * (2 * i + 1)) / (SERVERS.length * 2) - srvW / 2,
+        x: srvStartX + i * (srvW + srvGap),
         y: 0,
       },
       draggable: false,
       selectable: false,
       data: {
         label: (
-          <span style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {/* 状态面板：挂在节点上方（定版：上面是主机状态、
+                下面统一是做什么）。一台一块统一面板（半透明白底 + 细边），
+                不再是零散小胶囊：面板固定高 88px、满宽，七台顶边与底边
+                齐平，整排读成一条完整的带。内部自上而下：第一行主状态
+                （加粗），其下到期日/注意事项为灰字小行；语义色只落在
+                每行行首的小圆点上。面板底与云朵贴合（marginBottom 6），
+                节点总高与旧版式一致，坐标与连线不动 */}
             <span
-              aria-hidden="true"
               style={{
-                display: "inline-flex",
+                display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                width: 30,
-                height: 30,
-                borderRadius: 8,
-                backgroundColor: "#334155",
-                color: "#fff",
-                flexShrink: 0,
+                justifyContent: "flex-start",
+                gap: 2,
+                height: 88,
+                marginBottom: 6,
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "7px 6px 6px",
+                borderRadius: 10,
+                background: "rgba(255, 255, 255, 0.92)",
+                border: "1px solid rgba(124, 195, 232, 0.55)",
+                boxShadow: "0 1px 4px rgba(34, 102, 148, 0.14)",
               }}
             >
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              >
-                <rect x="3" y="4" width="18" height="7" rx="2" />
-                <rect x="3" y="13" width="18" height="7" rx="2" />
-                <path d="M6.5 7.5h.01M6.5 16.5h.01" strokeWidth="2.6" />
-              </svg>
+              {s.status.map((t, idx) => (
+                <span
+                  key={t.text}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    justifyContent: "center",
+                    whiteSpace: "nowrap",
+                    ...(idx === 0
+                      ? {
+                          fontSize: 11,
+                          fontWeight: 700,
+                          lineHeight: "17px",
+                          color: "#20394a",
+                        }
+                      : {
+                          fontSize: 10,
+                          fontWeight: 500,
+                          lineHeight: "15px",
+                          color: "#4b6070",
+                        }),
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: idx === 0 ? 6 : 5,
+                      height: idx === 0 ? 6 : 5,
+                      borderRadius: 9999,
+                      background: STATUS_DOT[t.tone],
+                      flexShrink: 0,
+                    }}
+                  />
+                  {t.text}
+                </span>
+              ))}
             </span>
-            <span style={{ textAlign: "left", minWidth: 0 }}>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "center",
+                width: "100%",
+                boxSizing: "border-box",
+                ...(deck
+                  ? {
+                      position: "relative",
+                      height: 84,
+                      // 内容整体下沉/右移约 4px：避开云形左上肩线，
+                      // 两行文字落在轮廓安全区正中
+                      padding: "8px 0 0 8px",
+                      filter: "drop-shadow(0 3px 6px rgba(34, 102, 148, 0.15))",
+                    }
+                  : {
+                      background: "var(--surface-alt)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                    }),
+              }}
+            >
+              {deck ? (
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 640 512"
+                  preserveAspectRatio="none"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  <path
+                    d={CLOUD_PATH}
+                    fill="#ffffff"
+                    stroke="#7cc3e8"
+                    strokeWidth={2}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              ) : null}
               <span
+                aria-hidden="true"
                 style={{
-                  display: "block",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  lineHeight: 1.25,
-                  whiteSpace: "nowrap",
+                  position: "relative",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  backgroundColor: "#334155",
+                  color: "#fff",
+                  flexShrink: 0,
                 }}
               >
-                {s.name}
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                >
+                  <rect x="3" y="4" width="18" height="7" rx="2" />
+                  <rect x="3" y="13" width="18" height="7" rx="2" />
+                  <path d="M6.5 7.5h.01M6.5 16.5h.01" strokeWidth="2.6" />
+                </svg>
               </span>
-              <span
-                style={{
-                  display: "block",
-                  fontSize: 11,
-                  opacity: 0.7,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {s.sub}
+              <span style={{ position: "relative", textAlign: "left", minWidth: 0 }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    lineHeight: 1.25,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.name}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    opacity: 0.7,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.sub}
+                </span>
               </span>
+            </span>
+            {/* 业务标签：直接放在服务器正下方，一行一个、竖着排（不在云朵里横排挤） */}
+            <span
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+                marginTop: 6,
+                width: "100%",
+              }}
+            >
+              {s.tags.map((t) => (
+                <span
+                  key={t}
+                  style={{
+                    display: "inline-flex",
+                    justifyContent: "center",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    lineHeight: 1.5,
+                    padding: "1px 8px",
+                    borderRadius: 9999,
+                    background: "rgba(255, 255, 255, 0.88)",
+                    border: "1px solid rgba(18, 147, 204, 0.35)",
+                    color: "#0b6ea8",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 1px 3px rgba(34, 102, 148, 0.12)",
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
             </span>
           </span>
         ),
       },
       style: {
         width: srvW,
-        borderRadius: 12,
-        border: "1px solid var(--border)",
-        background: "var(--surface-alt)",
+        border: "none",
+        background: "transparent",
         color: "var(--text)",
-        padding: "8px 10px",
-        // 甲板主题：云朵形容器——云形 SVG 底衬铺满节点（白云面 + 柔和水蓝
-        // 描边），无边框无硬阴影，只留一层柔和投影；文字照常压在云面上
-        ...(deck
-          ? {
-              border: "none",
-              background: "transparent",
-              backgroundImage: CLOUD_BG,
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-              boxShadow: "0 3px 8px rgba(34, 102, 148, 0.15)",
-              padding: "10px 16px",
-            }
-          : {}),
+        padding: 0,
+        boxShadow: "none",
       },
     }));
     ns.push({
@@ -324,7 +489,7 @@ export function PumpDiagram({
         type: "default",
         sourcePosition: Position.Top,
         targetPosition: Position.Bottom,
-        position: { x: totalW / 2 - pumpW / 2, y: 168 },
+        position: { x: totalW / 2 - pumpW / 2, y: layerOn ? 262 : 8 },
         draggable: false,
         selectable: false,
         data: {
@@ -409,11 +574,11 @@ export function PumpDiagram({
             : {}),
         },
       });
-    // 网关向上分供四台服务器（水抽上来给它们用）。
+    // 网关向上分供七台服务器（水抽上来给它们用）。
     // 甲板主题：每条连线先垫一层宽幅半透明水蓝渐变「柱体」（水柱本体，
     // 先入数组＝渲染在下层），再叠原 animated 虚线作柱面流光；柱宽即流量。
     const es: Edge[] = [];
-    SERVERS.forEach((_s, i) => {
+    if (layerOn) servers.forEach((_s, i) => {
       if (deck) {
         es.push({
           id: `srv-edge-bg-${i}`,
@@ -442,7 +607,7 @@ export function PumpDiagram({
         id: `src-${p.id}`,
         type: "input",
         sourcePosition: Position.Top,
-        position: { x: i * (NODE_W + GAP), y: 376 },
+        position: { x: i * (NODE_W + GAP), y: layerOn ? 470 : 216 },
         draggable: false,
         selectable: false,
         data: {
@@ -546,13 +711,9 @@ export function PumpDiagram({
             : {}),
         },
       });
-      // 优先按网关真实调用绘制：有近 7 天调用 → 边宽按调用量分档、标签显真实数；
-      // 暂无真实调用 → 保留原额度口径（粗细/流动不变），额度进标签主行、
-      // 「（暂无调用）」进标签第二行（data.sub），额度信息一字不删
+      // 边宽仍按网关真实调用分档：有近 7 天调用按调用量，暂无调用按额度
+      // 口径（粗细/流动不变）。使用情况文字不再挂在边上，统一到图下清单。
       const hasReal = p.gwCalls7d != null && p.gwCalls7d > 0;
-      const edgeLabel = hasReal
-        ? `近 7 天 ${p.gwCalls7d} 次 · ${formatTokens(p.gwTokens7d ?? 0)} tokens`
-        : (cfg.label ?? p.quotaText);
       const edgeWidth = hasReal ? callsToWidth(p.gwCalls7d ?? 0) : cfg.width;
       // 甲板主题：先垫水柱柱体层——宽幅半透明水蓝渐变，柱宽按同一流量
       // 分档放大（edgeWidth×2.6+3），柱宽即流量；一次性型柱体更淡
@@ -571,19 +732,12 @@ export function PumpDiagram({
       }
       es.push({
         id: `pipe-${p.id}`,
-        type: "pipe",
         source: `src-${p.id}`,
         target: "pump",
         animated: cfg.animated,
-        label: edgeLabel,
-        data: {
-          dy: LABEL_DY[i] ?? 0,
-          dx: LABEL_DX[i] ?? 0,
-          sub: hasReal ? undefined : "（暂无调用）",
-        },
         style: {
           // 甲板主题：柱面流光线（流动型深水蓝虚线、一次性型浅水蓝细线），
-          // 粗细/流动/标签口径不变
+          // 粗细/流动口径不变
           stroke: deck
             ? cfg.animated
               ? "#1293cc"
@@ -597,7 +751,7 @@ export function PumpDiagram({
       });
     });
     return { nodes: ns, edges: es };
-  }, [sources, deck]);
+  }, [sources, deck, layerOn, servers]);
 
   // ── 居中适配：容器宽度变化 / 水源增减后重新 fitView ──────────────────
   const flowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
@@ -631,7 +785,32 @@ export function PumpDiagram({
     fit();
   }, [fit, nodes]);
 
-  if (sources.length === 0) return null;
+  // 还没有任何已点亮水源：整图不画，给一块空状态面板（新用户自己的
+  // 看板初始就是这样——空白是预期，不是坏了）
+  if (sources.length === 0) {
+    return (
+      <section
+        aria-label="补给泵图"
+        className={`deck-panel overflow-hidden rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-[var(--surface)] ${
+          deck ? "relative" : ""
+        }`}
+      >
+        <div className="px-4 py-5">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--text)]">
+            补给泵图
+            {isExample ? (
+              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                示例
+              </span>
+            ) : null}
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--dim)]">
+            这里还是空的。把下面任意一家 API 羊毛点亮，它就会作为水源出现在这里、汇入补给泵；你自己的服务器不会预置，领到后由你逐件添置。
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   const hasAnyReal = sources.some(
     (p) => p.gwCalls7d != null && p.gwCalls7d > 0,
@@ -649,21 +828,31 @@ export function PumpDiagram({
       }`}
     >
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-4 pb-1 pt-3">
-        <h2 className="shrink-0 text-base font-semibold text-[var(--text)]">补给泵图</h2>
+        <h2 className="flex shrink-0 items-center gap-2 text-base font-semibold text-[var(--text)]">
+          补给泵图
+          {isExample ? (
+            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+              示例
+            </span>
+          ) : null}
+        </h2>
         <span className="text-xs text-[var(--dim)]">
           {hasAnyReal
-            ? "边宽与标签按近 7 天真实调用绘制；暂无调用的渠道暂按额度绘制"
+            ? "边宽按近 7 天真实调用绘制；使用情况在图下逐行列出"
             : "暂按额度绘制：管子越粗量越大，流动的管子是每日/每周刷新的"}
         </span>
         <span className="text-xs font-medium text-[var(--text)]">
           从左到右 = 优先顺序（多任务时可同时抽多家）
         </span>
       </div>
-      <div ref={wrapRef} className="h-[480px] w-full">
+      <div
+        ref={wrapRef}
+        className="relative w-full overflow-hidden"
+        style={{ height: layerOn ? 574 : 322 }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={reduced ? edges.map((e) => ({ ...e, animated: false })) : edges}
-          edgeTypes={EDGE_TYPES}
           onInit={(instance) => {
             flowRef.current = instance;
             requestAnimationFrame(() => fit());
@@ -674,10 +863,10 @@ export function PumpDiagram({
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
-          panOnDrag
+          panOnDrag={false}
           panOnScroll={false}
           zoomOnScroll={false}
-          zoomOnPinch
+          zoomOnPinch={false}
           zoomOnDoubleClick={false}
           preventScrolling={false}
           colorMode={
@@ -696,41 +885,71 @@ export function PumpDiagram({
             color="var(--border)"
           />
         </ReactFlow>
+        {/* 甲板主题：水柱渐变 defs（隐藏 svg，仅供边的柱体层 stroke 引用） */}
+        {deck ? (
+          <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0 }}>
+            <defs>
+              <linearGradient id={WATER_GRAD_ID} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#a8dcf7" stopOpacity="0.5" />
+                <stop offset="55%" stopColor="#4db6e8" stopOpacity="0.65" />
+                <stop offset="100%" stopColor="#1293cc" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
+          </svg>
+        ) : null}
+        {/* 甲板主题：图面底部两层浪花（后层深水蓝错速反向、前层白沫）。
+            波形改为 theme.css 里按 120px 周期精确平铺的背景贴图，任意容器
+            宽度都无缝衔接、右缘铺满；纯装饰、不挡交互 */}
+        {deck ? (
+          <>
+            <div className="deck-wave deck-wave-b" aria-hidden="true" />
+            <div className="deck-wave deck-wave-a" aria-hidden="true" />
+          </>
+        ) : null}
       </div>
-      {/* 甲板主题：水柱渐变 defs（隐藏 svg，仅供边的柱体层 stroke 引用） */}
-      {deck ? (
-        <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0 }}>
-          <defs>
-            <linearGradient id={WATER_GRAD_ID} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#a8dcf7" stopOpacity="0.5" />
-              <stop offset="55%" stopColor="#4db6e8" stopOpacity="0.65" />
-              <stop offset="100%" stopColor="#1293cc" stopOpacity="0.8" />
-            </linearGradient>
-          </defs>
-        </svg>
-      ) : null}
-      {/* 甲板主题：面板底部两层 SVG 浪花（后层深水蓝错速反向、前层白沫），
-          纯装饰、不挡交互；动画与减动效处理在 theme.css 皮肤层 */}
-      {deck ? (
-        <>
-          <svg
-            className="deck-wave deck-wave-b"
-            viewBox="0 0 2880 40"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path d={WAVE_PATH} fill="#1293cc" />
-          </svg>
-          <svg
-            className="deck-wave deck-wave-a"
-            viewBox="0 0 2880 40"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path d={WAVE_PATH} fill="#ffffff" />
-          </svg>
-        </>
-      ) : null}
+      {/* 使用情况：直接放在泵图下面，一行一家、竖着排（不再挂在连线上）。
+          顺序与图上从左到右的抽水优先级一致，序号与水源节点角标同号；
+          有真实调用显真实数，暂无调用保留额度文案并注明暂无调用。 */}
+      <div className="relative border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+        <h3 className="text-sm font-semibold text-[var(--text)]">使用情况</h3>
+        <ul className="mt-1.5 divide-y divide-[var(--border)]">
+          {sources.map((p, i) => {
+            const cfg = PIPE[p.name] ?? { label: undefined, width: 2, animated: false };
+            const hasReal = p.gwCalls7d != null && p.gwCalls7d > 0;
+            const usage = hasReal
+              ? `近 7 天 ${p.gwCalls7d} 次 · ${formatTokens(p.gwTokens7d ?? 0)} tokens`
+              : `${cfg.label ?? p.quotaText ?? "额度待填"} · 暂无调用`;
+            const brand = PUMP_BRAND[p.name] ?? { bg: "#0d5c4d", mark: "·" };
+            return (
+              <li key={p.id} className="flex min-h-9 items-center gap-2.5 py-1.5">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold leading-none text-[#3d2c00]"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0) 55%), linear-gradient(90deg, #d9a521, #f0a832 55%, #ef7d4a)",
+                    border: "1.5px solid #fff",
+                    boxShadow: "0 1px 5px rgba(35, 40, 56, 0.35)",
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
+                  style={{ backgroundColor: brand.bg }}
+                >
+                  {brand.mark}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)]">
+                  {p.name}
+                </span>
+                <span className="shrink-0 text-sm text-[var(--ink-2)]">{usage}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

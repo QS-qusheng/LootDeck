@@ -368,9 +368,10 @@
 }
 
 /* ══ 甲板主题（皮肤层 · 素净清新版） ═══════════════════════════════════
-   开关在 App 顶栏，状态落在 <html data-deck="on">（详情卡走 body portal，
-   属性必须挂在 html 上才能连弹窗一起换皮）。默认无此属性＝现行风格逐像素
-   不变；本节全部规则都以 [data-deck="on"] 为前提，只改视觉变量与装饰。
+   甲板主题为唯一呈现（2026-11-15 定版，与开源包一致，无素版可切）：
+   <html> 恒挂 data-deck="on"（index.html 预置 + App 兜底，详情卡走 body
+   portal，属性必须挂在 html 上才能连弹窗一起换皮）；本节全部规则都以
+   [data-deck="on"] 为前提，只改视觉变量与装饰。
    基调：QShip 科技风打底 + 清新色系（奶油白、海水蓝为主）+ 怪物收集图鉴
    的「感受」靠轻元素带出——圆润厚边、图鉴编号、分区类型色小徽章；不用
    任何任天堂 IP 素材。装饰做减法：无满页纹理、无大面积色块，2.5D 硬阴影
@@ -523,50 +524,44 @@
   color: color-mix(in srgb, var(--equip, #d9a521) 72%, #4a3200);
 }
 
-/* 主题开关：游戏 UI 式圆润厚边 + 按压回弹（偏移硬阴影随按下收起） */
-[data-deck="on"] button[role="switch"] {
-  border-width: 2px;
-  border-color: #d8bd8a;
-  box-shadow: 2px 2px 0 rgba(150, 112, 52, 0.28);
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.08s ease;
-}
-[data-deck="on"] button[role="switch"]:active {
-  transform: translate(1px, 1px);
-  box-shadow: 1px 1px 0 rgba(150, 112, 52, 0.28);
-}
-
 /* ── 泵图海水面板 + 浪花（.deck-aqua / .deck-wave 仅开主题时由组件挂载） ── */
 [data-deck="on"] .deck-aqua {
   background-image: linear-gradient(180deg, #c9f0fc 0%, #93d9f4 52%, #5fbdee 100%);
   border-color: #3f9fd2;
   box-shadow: 2px 2px 0 rgba(34, 102, 148, 0.28);
 }
-/* 两层 SVG 浪花：整层横向平移半程无缝循环，前层白沫、后层深水蓝错速反向 */
+/* 两层浪花：波形贴图（一个完整周期 120px）以 background-repeat 平铺，
+   动画只推 background-position 一个周期——任意容器宽度都无缝衔接、
+   右缘永远铺满，不再用固定像素宽的整幅 SVG 硬拼（旧做法在部分屏幕
+   宽度下右侧会断口/露底）。前层白沫、后层深水蓝错速反向。 */
 .deck-wave {
   position: absolute;
   left: 0;
+  right: 0;
   bottom: 0;
-  width: 200%;
+  background-repeat: repeat-x;
+  background-size: 120px 100%;
+  background-position: 0 0;
   pointer-events: none;
 }
 .deck-wave-a {
   height: 40px;
   opacity: 0.55;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cpath d='M0 22 Q30 8 60 22 T120 22 L120 40 L0 40 Z' fill='%23ffffff'/%3E%3C/svg%3E");
   animation: deckWaveMove 6.5s linear infinite;
 }
 .deck-wave-b {
   height: 30px;
   opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40' preserveAspectRatio='none'%3E%3Cpath d='M0 22 Q30 8 60 22 T120 22 L120 40 L0 40 Z' fill='%231293cc'/%3E%3C/svg%3E");
   animation: deckWaveMove 11s linear infinite reverse;
 }
 @keyframes deckWaveMove {
   from {
-    transform: translateX(0);
+    background-position: 0 0;
   }
   to {
-    transform: translateX(-50%);
+    background-position: -120px 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

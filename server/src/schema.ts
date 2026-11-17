@@ -46,8 +46,21 @@ export const providers = sqliteTable("providers", {
   taskLastDoneAt: integer("task_last_done_at", { mode: "timestamp_ms" }),
   keyTail: text("key_tail").notNull().default(""),
   note: text("note").notNull().default(""),
+  // owned=1：这一行是看板主人自己的战利品（自己新增的、或在示例状态下亲手
+  // 动过的）。示例状态翻转清场时只有 owned 行原样保留，其余示例数据复位。
+  owned: integer("owned").notNull().default(0),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
+});
+
+// 键值设置。当前只用 board_mode 一条：example＝示例状态（用户还没添置任何
+// 自己的战利品，甲板展示内置示例数据并明确标注示例）；own＝用户自己的
+// 状态（只显示他自己的数据）。迁移 0006 按存量数据定初始值：台账已有数据
+// （如原作者本人）直接 own，全新安装从 example 起步；用户添置第一件自己的
+// 战利品时由动作层自动翻转 example → own 并清场，此后不再回示例。
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
 });
