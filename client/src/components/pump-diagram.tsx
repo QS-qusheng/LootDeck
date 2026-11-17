@@ -24,8 +24,17 @@
    壳层先窄后宽、旋转屏幕、窗口改尺寸都会让初次 fit 的缩放/偏移过期，整图
    靠左、1 号节点被裁。故容器宽度一变（ResizeObserver）就重新 fitView 居中；
    minZoom 放到 0.2，窄屏能把整排缩进画面完整居中。图面为只读展示：禁止
-   手动平移/缩放/拖拽，始终保持 fitView 的最佳居中状态。 */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+   手动平移/拖拽，始终保持 fitView 的最佳居中状态。
+   窄屏紧凑布局（2026-11-17 修）：容器宽 <720px 时服务器/水源改多行竖排
+   （服务器每行 2 台、水源每行 3 家），图变窄变高、fitView 缩放从约 0.19
+   升到约 0.6，标题回到可读量级；容器高度按图面纯宽高比折算，不再固定
+   574px 在图面上下留大片空白；ResizeObserver 对宽、高任一变化都防抖
+   重 fit——只盯宽度时，高度落位那一步会被漏掉、fit 停在挂载初期的
+   临时视图上（缩放夹到 minZoom、图钉在面板顶部约四成处，2026-11-17
+   导出复核实证后修）；双指捏合缩放开放（zoomOnPinch），细字可
+   捏合放大看清，一指拖动仍归页面滚动（panOnDrag 保持关）。紧凑版不画
+   水柱柱体层，免得粗柱压过中间行的节点。 */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 Background,
 BackgroundVariant,
@@ -251,7 +260,13 @@ export function PumpDiagram({
   const servers = isExample ? EXAMPLE_SERVERS : (serversProp ?? []);
   const layerOn = showServers && servers.length > 0;
 
-  const { nodes, edges } = useMemo(() => {
+  // 容器实测宽度（下方 ResizeObserver 回填）：决定宽/紧凑布局与容器高度。
+  // <720px 走紧凑布局：整排硬塞窄屏时 fitView 缩放只有约 0.19，字小到
+  // 看不清（2026-11-17 用户反馈），改多行竖排把缩放抬回约 0.6。
+  const [boxWidth, setBoxWidth] = useState(0);
+  const compact = boxWidth > 0 && boxWidth < 720;
+
+  const { nodes, edges, bounds } = useMemo(() => {
     const totalW = sources.length * NODE_W + Math.max(0, sources.length - 1) * GAP;
     const pumpW = 224;
     // 服务器节点宽 248、间距 10：七台一排总宽 1796，比水源排（1086）宽，
@@ -262,16 +277,60 @@ export function PumpDiagram({
     const srvGap = 10;
     const srvStartX =
       (totalW - (servers.length * srvW + (servers.length - 1) * srvGap)) / 2;
+    // ── 布局分支 ────────────────────────────────────────────────
+    // 宽版（桌面）：服务器一排、水源一排，坐标与旧版逐项一致。
+    // 紧凑版（手机）：服务器每行 2 台、水源每行 3 家多行排布，图变窄
+    // 变高；bounds 是图面内容宽高（供容器按宽高比折算高度）。
+    const perSrvRow = compact ? 2 : Math.max(1, servers.length);
+    const perSrcRow = compact ? 3 : Math.max(1, sources.length);
+    const srvRowW = (k: number) => k * srvW + Math.max(0, k - 1) * srvGap;
+    const srcRowW = (k: number) => k * NODE_W + Math.max(0, k - 1) * GAP;
+    const contentW = Math.max(
+      layerOn ? srvRowW(Math.min(perSrvRow, servers.length)) : 0,
+      srcRowW(Math.min(perSrcRow, sources.length)),
+      pumpW,
+    );
+    const SRV_PITCH_Y = 268; // 服务器节点最高约 255（状态面板+云+3 枚业务标签）
+    const SRC_PITCH_Y = 72;
+    const srvRows = layerOn ? Math.ceil(servers.length / perSrvRow) : 0;
+    const srcRows = Math.ceil(sources.length / perSrcRow);
+    const pumpX = compact ? contentW / 2 - pumpW / 2 : totalW / 2 - pumpW / 2;
+    const pumpY = compact
+      ? layerOn
+        ? srvRows * SRV_PITCH_Y + 8
+        : 8
+      : layerOn
+        ? 262
+        : 8;
+    const srcY0 = compact ? pumpY + 100 : layerOn ? 470 : 216;
+    const contentH = compact
+      ? srcY0 + Math.max(0, srcRows - 1) * SRC_PITCH_Y + 58
+      : layerOn
+        ? 528
+        : 274;
+    const srvPos = (i: number): { x: number; y: number } => {
+      if (!compact) return { x: srvStartX + i * (srvW + srvGap), y: 0 };
+      const row = Math.floor(i / perSrvRow);
+      const col = i % perSrvRow;
+      const inRow = Math.min(perSrvRow, servers.length - row * perSrvRow);
+      return {
+        x: (contentW - srvRowW(inRow)) / 2 + col * (srvW + srvGap),
+        y: row * SRV_PITCH_Y,
+      };
+    };
+    const srcPos = (i: number): { x: number; y: number } => {
+      if (!compact) return { x: i * (NODE_W + GAP), y: layerOn ? 470 : 216 };
+      const row = Math.floor(i / perSrcRow);
+      const col = i % perSrcRow;
+      return { x: col * (NODE_W + GAP), y: srcY0 + row * SRC_PITCH_Y };
+    };
     const ns: Node[] = !layerOn
       ? []
       : servers.map((s, i) => ({
       id: `srv-${i}`,
       type: "output" as const,
       targetPosition: Position.Bottom,
-      position: {
-        x: srvStartX + i * (srvW + srvGap),
-        y: 0,
-      },
+      position: srvPos(i),
       draggable: false,
       selectable: false,
       data: {
@@ -489,7 +548,7 @@ export function PumpDiagram({
         type: "default",
         sourcePosition: Position.Top,
         targetPosition: Position.Bottom,
-        position: { x: totalW / 2 - pumpW / 2, y: layerOn ? 262 : 8 },
+        position: { x: pumpX, y: pumpY },
         draggable: false,
         selectable: false,
         data: {
@@ -579,7 +638,8 @@ export function PumpDiagram({
     // 先入数组＝渲染在下层），再叠原 animated 虚线作柱面流光；柱宽即流量。
     const es: Edge[] = [];
     if (layerOn) servers.forEach((_s, i) => {
-      if (deck) {
+      // 紧凑版不垫水柱：多行排布下粗柱会压过中间行的节点，只留流光线
+      if (deck && !compact) {
         es.push({
           id: `srv-edge-bg-${i}`,
           source: "pump",
@@ -607,7 +667,7 @@ export function PumpDiagram({
         id: `src-${p.id}`,
         type: "input",
         sourcePosition: Position.Top,
-        position: { x: i * (NODE_W + GAP), y: layerOn ? 470 : 216 },
+        position: srcPos(i),
         draggable: false,
         selectable: false,
         data: {
@@ -716,8 +776,9 @@ export function PumpDiagram({
       const hasReal = p.gwCalls7d != null && p.gwCalls7d > 0;
       const edgeWidth = hasReal ? callsToWidth(p.gwCalls7d ?? 0) : cfg.width;
       // 甲板主题：先垫水柱柱体层——宽幅半透明水蓝渐变，柱宽按同一流量
-      // 分档放大（edgeWidth×2.6+3），柱宽即流量；一次性型柱体更淡
-      if (deck) {
+      // 分档放大（edgeWidth×2.6+3），柱宽即流量；一次性型柱体更淡。
+      // 紧凑版同服务器边：不垫柱体，免得压过中间行的水源节点
+      if (deck && !compact) {
         es.push({
           id: `pipe-bg-${p.id}`,
           source: `src-${p.id}`,
@@ -750,13 +811,14 @@ export function PumpDiagram({
         },
       });
     });
-    return { nodes: ns, edges: es };
-  }, [sources, deck, layerOn, servers]);
+    return { nodes: ns, edges: es, bounds: { w: contentW, h: contentH } };
+  }, [sources, deck, layerOn, servers, compact]);
 
   // ── 居中适配：容器宽度变化 / 水源增减后重新 fitView ──────────────────
   const flowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const lastWidthRef = useRef(0);
+  const lastHeightRef = useRef(0);
   const fit = useCallback(() => {
     flowRef.current?.fitView({ padding: 0.12, maxZoom: 1, duration: 200 });
   }, []);
@@ -766,11 +828,24 @@ export function PumpDiagram({
     if (!el) return;
     let timer: number | undefined;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (Math.abs(w - lastWidthRef.current) < 2) return;
-      lastWidthRef.current = w;
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      const widthChanged = Math.abs(rect.width - lastWidthRef.current) >= 2;
+      const heightChanged = Math.abs(rect.height - lastHeightRef.current) >= 2;
+      if (!widthChanged && !heightChanged) return;
+      if (widthChanged) {
+        lastWidthRef.current = rect.width;
+        setBoxWidth(rect.width);
+      }
+      lastHeightRef.current = rect.height;
+      // 宽或高任一变化都要重 fit：容器高度是按 boxWidth 折算出来的，
+      // 「宽度已定、高度随后才落位」这一步只改高不改宽——旧版只盯宽度，
+      // 这次高度变化被整个漏掉，fit 永远停在挂载初期（宽版布局 + 临时
+      // 高度）算出的视图上：缩放被夹到 minZoom、图钉在顶部、下方留出
+      // 大片空白（2026-11-17 导出复核实证）。防抖 150ms 也让 React Flow
+      // 自身的尺寸同步先落位，fit 读到的就是最终容器尺寸。
       window.clearTimeout(timer);
-      timer = window.setTimeout(fit, 120);
+      timer = window.setTimeout(fit, 150);
     });
     ro.observe(el);
     return () => {
@@ -820,6 +895,30 @@ export function PumpDiagram({
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // 容器高度按图面宽高比折算：高度跟着缩放后的实际内容走，图面上下不再
+  // 留大片空白（旧版固定 574px，手机上内容只有约 110px 高、其余全是空
+  // 蓝面）。宽版另按旧高度封顶，桌面只会更紧凑、不会更高。
+  // 紧凑版用纯宽高比（不加边距修正量）：fitView 的 padding 0.12 是按
+  // 容器宽高各扣 24% 的比例量，H/W 与 bounds.h/bounds.w 严格相等时
+  // 横竖两个方向的缩放恰好一致，图面四边只剩 padding 边距、不留空白
+  // 带；旧公式给宽高各加固定修正量（+32/+48），在窄屏上把比例拉偏，
+  // 高度比图面所需多出一截（且与最终 fit 的竞态叠加后表现为图只占
+  // 面板上部约四成）。宽版保留旧公式与封顶，桌面渲染逐像素不变。
+  const diagramH =
+    boxWidth > 0
+      ? Math.max(
+          240,
+          compact
+            ? Math.round((boxWidth * bounds.h) / bounds.w)
+            : Math.round((boxWidth * (bounds.h + 48)) / (bounds.w + 32)),
+        )
+      : layerOn
+        ? 574
+        : 322;
+  const boxHeight = compact
+    ? diagramH
+    : Math.min(layerOn ? 574 : 322, diagramH);
+
   return (
     <section
       aria-label="补给泵图"
@@ -844,11 +943,14 @@ export function PumpDiagram({
         <span className="text-xs font-medium text-[var(--text)]">
           从左到右 = 优先顺序（多任务时可同时抽多家）
         </span>
+        {compact ? (
+          <span className="text-xs text-[var(--dim)]">双指捏合可放大看清</span>
+        ) : null}
       </div>
       <div
         ref={wrapRef}
         className="relative w-full overflow-hidden"
-        style={{ height: layerOn ? 574 : 322 }}
+        style={{ height: boxHeight }}
       >
         <ReactFlow
           nodes={nodes}
@@ -860,13 +962,14 @@ export function PumpDiagram({
           fitView
           fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
           minZoom={0.2}
+          maxZoom={2}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
           panOnDrag={false}
           panOnScroll={false}
           zoomOnScroll={false}
-          zoomOnPinch={false}
+          zoomOnPinch
           zoomOnDoubleClick={false}
           preventScrolling={false}
           colorMode={

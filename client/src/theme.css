@@ -114,6 +114,14 @@
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 14px 10px;
 }
+/* 手机端卡墙改 3 列：2 列时方形卡面过大（约 160px），与下方文字的比例
+   失调（2026-11-17 用户反馈）；3 列约 103px 一格，与桌面观感接近 */
+@media (max-width: 640px) {
+  .qs-wall {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px 8px;
+  }
+}
 
 /* 未点亮：图片置灰（roster.css 原值） */
 .qs-unlit-img {
@@ -602,4 +610,19 @@
 [data-deck="on"] .deck-card-status {
   min-height: 4rem;
   align-content: flex-start;
+}
+
+/* ── 手机端收紧卡下文字预留行高（仅甲板主题、窄屏） ──────────────────
+   上面的预留按全场最长文本定（价值句 3 行、状态 4 行），桌面多列时
+   值得；手机上多数卡用不满——如提效工具价值句多为 1 行、状态 2 行，
+   全额预留会在每张卡里留出约 70px 空白、比例失调（2026-11-17 用户
+   反馈）。窄屏改按常见行数预留（价值句 2 行、状态 3 行），个别更长
+   的卡自然撑高、由网格行高吸收；名字仍保留 2 行（窄格里名字常折行）。 */
+@media (max-width: 640px) {
+  [data-deck="on"] .deck-card-value {
+    min-height: 2.4375rem;
+  }
+  [data-deck="on"] .deck-card-status {
+    min-height: 3rem;
+  }
 }
