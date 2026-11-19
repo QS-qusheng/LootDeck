@@ -191,9 +191,9 @@ function DeckIcon({ name, className }: { name: DeckIconName; className?: string 
 // icon 为甲板主题下分区标题旁的海盗小图标（仅开主题时渲染，关时无此节点）
 const CATEGORIES: Array<{ key: string; title: string; desc: string; icon?: DeckIconName }> = [
   { key: "efficiency", title: "提效工具", desc: "让 AI 助手升级进化的底层能力——手、眼、网关这一层", icon: "shipWheel" },
-  { key: "compute", title: "免费VPS", desc: "免费的服务器 / GPU 算力，派活跑批用", icon: "anchor" },
+  { key: "compute", title: "云算力", desc: "服务器 / GPU 算力，派活跑批用", icon: "anchor" },
   { key: "api", title: "API 能打水", desc: "可编程调用的 API 额度，池子的真水源", icon: "treasureChest" },
-  { key: "tool", title: "工具福利", desc: "开发工具类的免费档" },
+  { key: "tool", title: "工具福利", desc: "开发工具类的基础档" },
 ];
 
 function groupOf(p: Provider): string {
@@ -205,7 +205,7 @@ function groupOf(p: Provider): string {
    工具福利＝草绿。与 theme.css 皮肤层里分区标题徽章的颜色同值。 */
 const TYPE_META: Record<string, { title: string; color: string }> = {
   efficiency: { title: "提效工具", color: "#7d9db0" },
-  compute: { title: "免费VPS", color: "#f5b301" },
+  compute: { title: "云算力", color: "#f5b301" },
   api: { title: "API 能打水", color: "#2ea6e0" },
   tool: { title: "工具福利", color: "#58b368" },
 };
@@ -230,7 +230,7 @@ const BRAND: Record<string, { bg: string; mark: string }> = {
   "Cloudflare Workers AI": { bg: "#f6821f", mark: "Cf" },
   OpenRouter: { bg: "#475569", mark: "OR" },
   硅基流动: { bg: "#0e7490", mark: "硅" },
-  硅基流动新人赠金: { bg: "#0e7490", mark: "赠" },
+  硅基流动新人试用: { bg: "#0e7490", mark: "试" },
   火山方舟: { bg: "#325ab4", mark: "火" },
   蚂蚁灵波: { bg: "#1677ff", mark: "蚂" },
   "阶跃星辰 StepFun": { bg: "#7c2d12", mark: "阶" },
@@ -405,7 +405,7 @@ const LOGOS: Record<string, LogoSpec> = {
   魔搭社区: { src: logoModelscope, fit: "cover" },
   OpenRouter: { src: logoOpenrouter, fit: "contain" },
   硅基流动: { src: logoSiliconflow, fit: "cover" },
-  硅基流动新人赠金: { src: logoSiliconflow, fit: "cover" },
+  硅基流动新人试用: { src: logoSiliconflow, fit: "cover" },
   百度智能云: { src: logoBaiducloud, fit: "cover" },
   DeepSeek: { src: logoDeepseek, fit: "contain" },
   "阶跃星辰 StepFun": { src: logoStepfun, fit: "cover" },
@@ -593,7 +593,7 @@ function DetailCard({
   // 阅读区事实三行（管理信息——Key 尾号/备注——收进下方「管理」折叠区）
   const rows: Array<[string, string]> = [
     ["谁家的", p.backer || "—"],
-    ["羊毛内容", p.quotaText || "—"],
+    ["权益内容", p.quotaText || "—"],
     ["周期", p.refreshRule || "—"],
   ];
 
@@ -1240,7 +1240,7 @@ export function App() {
             <div className="mt-4 flex flex-col gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
               {/* ── 左列：大羊毛推荐 ─────────────────────────────── */}
               <aside
-                aria-label="大羊毛推荐"
+                aria-label="精选推荐"
                 className="deck-panel rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 lg:sticky lg:top-5"
               >
                 <h2 className="text-lg font-semibold text-[var(--text)]">
@@ -1248,7 +1248,7 @@ export function App() {
                     name="pirateFlag"
                     className="mr-2 inline h-6 w-6 align-[-5px] text-[#c9a227]"
                   />
-                  大羊毛推荐
+                  精选推荐
                 </h2>
                 <p className="mt-0.5 text-xs text-[var(--dim)]">全场量级最大的几家 · 点一家看详情</p>
                 <div className="mt-2 space-y-0.5">

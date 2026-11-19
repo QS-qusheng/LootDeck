@@ -10,7 +10,7 @@
    只取已点亮且在 PUMP_ORDER 名单内的 6 家，名称/额度文案取台账字段。
    水源从左到右按抽水优先级排列（PUMP_ORDER，序号徽章 1、2、3…）：
    先烧快过期的——魔搭（24h 过期）> Cloudflare（当天作废）> OpenRouter
-   （隔日作废）> 硅基流动（常驻零成本）> 硅基流动新人赠金（一次性余额）>
+   （隔日作废）> 硅基流动（常驻零成本）> 硅基流动新人试用（一次性余额）>
    火山方舟（一次性大额）。序号是挑选优先级，不是独占
    顺序：多任务时可同时抽多家。Kaggle 是上方那台 GPU 服务器，不在水源行重复出现。
    边的粗细按每日量级相对缩放（映射表 PIPE 是展示口径，源自台账额度量级）；
@@ -63,12 +63,12 @@ const PIPE: Record<
   "Cloudflare Workers AI": { label: "10,000 Neurons/天", width: 5, animated: true },
   魔搭社区: { label: "250 魔粒/天", width: 3.5, animated: true },
   OpenRouter: { label: "50 次/天", width: 2.5, animated: true },
-  硅基流动: { label: "小模型 ¥0 调用", width: 2, animated: true },
-  硅基流动新人赠金: { label: "¥16 赠金 · 一次性", width: 1.5, animated: false },
-  火山方舟: { label: "50 万 Token · 一次性", width: 4, animated: false },
+  硅基流动: { label: "小模型直接调用", width: 2, animated: true },
+  硅基流动新人试用: { label: "试用额度 · 一次性", width: 1.5, animated: false },
+  火山方舟: { label: "试用 Token · 一次性", width: 4, animated: false },
 };
 // 网关真实调用：有近 7 天调用的渠道，边宽按调用量分档、标签显真实数；
-// 暂无真实调用（gwCalls7d 为空或 0，含未接网关的火山方舟/硅基流动新人赠金）
+// 暂无真实调用（gwCalls7d 为空或 0，含未接网关的火山方舟/硅基流动新人试用）
 // 保留原额度标签并在标签后加「（暂无调用）」。
 function callsToWidth(calls: number): number {
   if (calls >= 1000) return 6;
@@ -93,7 +93,7 @@ const PUMP_ORDER = [
   "Cloudflare Workers AI",
   "OpenRouter",
   "硅基流动",
-  "硅基流动新人赠金",
+  "硅基流动新人试用",
   "火山方舟",
 ];
 
@@ -133,12 +133,12 @@ const EXAMPLE_SERVERS: PumpServer[] = [
     ],
   },
   {
-    name: "Kaggle · 免费 GPU",
+    name: "Kaggle · GPU 算力",
     sub: "每周约 30 小时 T4 x2",
     tags: ["GPU 跑批"],
     status: [
       { text: "可用", tone: "ok" },
-      { text: "每周六刷新额度", tone: "due" },
+      { text: "每周六刷新", tone: "due" },
       { text: "会话制 · 闲置会断", tone: "warn" },
     ],
   },
@@ -154,11 +154,11 @@ const EXAMPLE_SERVERS: PumpServer[] = [
   },
   {
     name: "云电脑（示例）",
-    sub: "免费云电脑 · 示例",
+    sub: "云电脑 · 示例",
     tags: ["远程桌面"],
     status: [
       { text: "运行中", tone: "ok" },
-      { text: "限时免费 · 无固定到期日", tone: "due" },
+      { text: "限时开放 · 无固定到期日", tone: "due" },
       { text: "闲置可能被平台回收", tone: "warn" },
     ],
   },
@@ -168,18 +168,18 @@ const EXAMPLE_SERVERS: PumpServer[] = [
     tags: ["网络出口"],
     status: [
       { text: "运行中", tone: "ok" },
-      { text: "试用赠金期内", tone: "due" },
+      { text: "试用期内", tone: "due" },
       { text: "临时 IP · 重启可能变", tone: "warn" },
     ],
   },
   {
     name: "云服务器（示例）",
-    sub: "免费计划小服务器 · 示例",
+    sub: "试用期小服务器 · 示例",
     tags: ["常驻服务"],
     status: [
       { text: "运行中", tone: "ok" },
       { text: "固定 IP", tone: "muted" },
-      { text: "免费计划期内", tone: "due" },
+      { text: "试用期内", tone: "due" },
       { text: "期后需绑卡续用", tone: "warn" },
     ],
   },
@@ -201,7 +201,7 @@ const PUMP_BRAND: Record<string, { bg: string; mark: string }> = {
   "Cloudflare Workers AI": { bg: "#f6821f", mark: "Cf" },
   OpenRouter: { bg: "#475569", mark: "OR" },
   硅基流动: { bg: "#0e7490", mark: "硅" },
-  硅基流动新人赠金: { bg: "#0e7490", mark: "赠" },
+  硅基流动新人试用: { bg: "#0e7490", mark: "试" },
   火山方舟: { bg: "#325ab4", mark: "火" },
 };
 
@@ -884,7 +884,7 @@ export function PumpDiagram({
             ) : null}
           </h2>
           <p className="mt-1 text-sm leading-6 text-[var(--dim)]">
-            这里还是空的。把下面任意一家 API 羊毛点亮，它就会作为水源出现在这里、汇入补给泵；你自己的服务器不会预置，领到后由你逐件添置。
+            这里还是空的。把下面任意一家 API 权益点亮，它就会作为水源出现在这里、汇入补给泵；你自己的服务器不会预置，领到后由你逐件添置。
           </p>
         </div>
       </section>
