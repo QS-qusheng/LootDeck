@@ -2,7 +2,7 @@
   "entry": "client/dist/index.html",
   "managedCronJobs": [],
   "name": "战利品甲板",
-  "platformVersion": 28,
+  "platformVersion": 29,
   "runtime": "typescript",
   "slug": "yang-mao-token-chi"
 }

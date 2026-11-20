@@ -43,6 +43,13 @@
       "when": 1794886459719,
       "tag": "0006_add_settings_table",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795163738555,
+      "tag": "0007_user_layer_tables_and_provider_hidden",
+      "breakpoints": true
     }
   ]
 }

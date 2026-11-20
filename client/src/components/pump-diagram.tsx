@@ -1,8 +1,18 @@
-/* ── 补给泵图：React Flow（@xyflow/react，MIT）本体渲染 ─────────────────
-   形态：三层——最上方一排七台服务器节点（数据经 getPumpServers 动作
-   下发：本人状态为作者的真实服务器，示例状态为虚构示例节点），中间居中
-   「补给泵 · 网关」节点，下方一排已点亮的
-   水源节点。边从水源向上汇入泵，再从泵向上分供七台服务器。每台服务器
+/* ── 资源调度图（原名补给泵图，2026-11-20 改名）：React Flow（@xyflow/react，MIT）本体渲染 ──
+   形态：三层——最上方一排服务器节点（数据经 getPumpServers 动作从
+   用户数据层下发，可增删改；示例状态为虚构示例组），中间居中
+   「补给泵 · 网关」节点，下方一排已点亮的水源节点。边从水源向上汇入
+   泵，再从泵向上分供服务器。
+   分页（2026-11-20 定版，2026-11-20 纠错补规）：顶部两个页签「常用
+   资源」（默认）/「不常用资源」——服务器按台账 freq 字段分（驻留/常驻
+   ＝常用、会话制/按需＝不常用），水源按近 7 天真实调用分。分页的
+   铁规是「无计量 ≠ 未使用」：只有被网关计量过、且近 7 天调用为 0 的
+   水源才判不常用；根本不经过网关、没有计量的水源（自有通道、未接
+   网关的渠道）不许默认判不常用，按性质归常用页（自有通道是全场
+   用量最大的一个，只是它不经这个网关、计量恒为零）。图下
+   使用情况跟随当前页签。网关恒居中：泵与整图共用同一条中轴，服务器
+   排、水源排都绕中轴对称排布；任一排一排放不下时按均衡分行（行内
+   顺序不变、离泵最近的一行是第一行），不硬挤。每台服务器
    标签分工（2026-11-17 定版）：状态标签挂在节点上方（主机状态：绿
    运行中 / 金到期日 / 红注意事项 / 灰未登记，七台全做），业务标签统一
    放在节点下方（水蓝，这台在干的活）。
@@ -10,7 +20,7 @@
    只取已点亮且在 PUMP_ORDER 名单内的 6 家，名称/额度文案取台账字段。
    水源从左到右按抽水优先级排列（PUMP_ORDER，序号徽章 1、2、3…）：
    先烧快过期的——魔搭（24h 过期）> Cloudflare（当天作废）> OpenRouter
-   （隔日作废）> 硅基流动（常驻零成本）> 硅基流动新人试用（一次性余额）>
+   （隔日作废）> 硅基流动（常驻零成本）> 硅基流动新人赠金（一次性余额）>
    火山方舟（一次性大额）。序号是挑选优先级，不是独占
    顺序：多任务时可同时抽多家。Kaggle 是上方那台 GPU 服务器，不在水源行重复出现。
    边的粗细按每日量级相对缩放（映射表 PIPE 是展示口径，源自台账额度量级）；
@@ -63,12 +73,18 @@ const PIPE: Record<
   "Cloudflare Workers AI": { label: "10,000 Neurons/天", width: 5, animated: true },
   魔搭社区: { label: "250 魔粒/天", width: 3.5, animated: true },
   OpenRouter: { label: "50 次/天", width: 2.5, animated: true },
-  硅基流动: { label: "小模型直接调用", width: 2, animated: true },
-  硅基流动新人试用: { label: "试用额度 · 一次性", width: 1.5, animated: false },
-  火山方舟: { label: "试用 Token · 一次性", width: 4, animated: false },
+  硅基流动: { label: "小模型 ¥0 调用", width: 2, animated: true },
+  硅基流动新人赠金: { label: "¥16 赠金 · 一次性", width: 1.5, animated: false },
+  火山方舟: { label: "50 万 Token · 一次性", width: 4, animated: false },
 };
+// 自有通道槽位（图内固定水源，不在台账里）：通用槽位、不写死任何具体
+// 名字——显示名与头像运行时从用户数据层取（getSelfIdentity：用户自己的
+// Muse 的名字/头像），取不到回落「我的 Muse」＋通用图标。它不经过
+// 网关、没有调用统计，使用情况照实写「不经网关计量，实际用量最大」，
+// 不编数字；分页恒归常用页（无计量 ≠ 未使用）。
+const SELF_PIPE = { label: "自有通道", width: 2, animated: true };
 // 网关真实调用：有近 7 天调用的渠道，边宽按调用量分档、标签显真实数；
-// 暂无真实调用（gwCalls7d 为空或 0，含未接网关的火山方舟/硅基流动新人试用）
+// 暂无真实调用（gwCalls7d 为空或 0，含未接网关的火山方舟/硅基流动新人赠金）
 // 保留原额度标签并在标签后加「（暂无调用）」。
 function callsToWidth(calls: number): number {
   if (calls >= 1000) return 6;
@@ -87,104 +103,33 @@ function formatTokens(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-// 抽水优先级（左→右，序号 1 起）：先烧快过期的
-const PUMP_ORDER = [
+// 抽水优先级默认序（左→右，序号 1 起）：先烧快过期的。用户拖动改序后
+// 以用户层顺序为准，此表只作默认与在场判定
+export const PUMP_ORDER = [
   "魔搭社区",
   "Cloudflare Workers AI",
   "OpenRouter",
   "硅基流动",
-  "硅基流动新人试用",
+  "硅基流动新人赠金",
   "火山方舟",
 ];
 
 type ServerStatusTone = "ok" | "due" | "warn" | "muted";
 export type PumpServer = {
+  id: number;
   name: string;
   sub: string;
   tags: string[];
   status: Array<{ text: string; tone: ServerStatusTone }>;
+  /** hot=常用资源页 / cold=不常用资源页（台账字段，服务器管理里可改） */
+  freq: "hot" | "cold";
+  demo: boolean;
 };
 
-// 服务器层数据口径：作者本人的真实服务器清单只存服务端，经
-// getPumpServers 动作下发（仅本人状态 own 返回），不写进客户端代码。
-// 示例状态下服务端返回空数组，客户端改画下面这排虚构示例节点：
-// 两台云服务器 + Kaggle 免费 GPU + Codespaces 开发机 + 云电脑、海外
-// 服务器、免费计划小服务器三台示例节点，名称与说明均为虚构示例。
-// 呈现（定版）：状态收成一块统一面板挂在每台服务器节点上方（等高对齐
-// 成一条带，语义色只在行首小圆点上）、业务标签统一放在节点下方，一行
-// 一个、竖着排；到期日只写确切知道的，没有记录的如实标「到期日未登记」。
-const EXAMPLE_SERVERS: PumpServer[] = [
-  {
-    name: "腾讯云 · 云服务器",
-    sub: "云服务器",
-    tags: ["业务站点", "数据处理"],
-    status: [
-      { text: "运行中", tone: "ok" },
-      { text: "到期日未登记", tone: "muted" },
-    ],
-  },
-  {
-    name: "香港 · 云服务器",
-    sub: "云服务器",
-    tags: ["应用服务"],
-    status: [
-      { text: "运行中", tone: "ok" },
-      { text: "到期日未登记", tone: "muted" },
-    ],
-  },
-  {
-    name: "Kaggle · GPU 算力",
-    sub: "每周约 30 小时 T4 x2",
-    tags: ["GPU 跑批"],
-    status: [
-      { text: "可用", tone: "ok" },
-      { text: "每周六刷新", tone: "due" },
-      { text: "会话制 · 闲置会断", tone: "warn" },
-    ],
-  },
-  {
-    name: "GitHub Codespaces",
-    sub: "开发机 · 每月 60 小时",
-    tags: ["云端开发"],
-    status: [
-      { text: "可用", tone: "ok" },
-      { text: "每月刷新", tone: "due" },
-      { text: "闲置约 30 分钟自动停", tone: "warn" },
-    ],
-  },
-  {
-    name: "云电脑（示例）",
-    sub: "云电脑 · 示例",
-    tags: ["远程桌面"],
-    status: [
-      { text: "运行中", tone: "ok" },
-      { text: "限时开放 · 无固定到期日", tone: "due" },
-      { text: "闲置可能被平台回收", tone: "warn" },
-    ],
-  },
-  {
-    name: "海外云服务器（示例）",
-    sub: "海外小服务器 · 示例",
-    tags: ["网络出口"],
-    status: [
-      { text: "运行中", tone: "ok" },
-      { text: "试用期内", tone: "due" },
-      { text: "临时 IP · 重启可能变", tone: "warn" },
-    ],
-  },
-  {
-    name: "云服务器（示例）",
-    sub: "试用期小服务器 · 示例",
-    tags: ["常驻服务"],
-    status: [
-      { text: "运行中", tone: "ok" },
-      { text: "固定 IP", tone: "muted" },
-      { text: "试用期内", tone: "due" },
-      { text: "期后需绑卡续用", tone: "warn" },
-    ],
-  },
-];
-
+// 服务器层数据口径：服务器清单存用户数据层（pump_servers 表），经
+// getPumpServers 动作下发（行带 id/freq/demo），页面可增删改；客户端
+// 不再内置任何服务器清单。示例状态下发的是服务端播种的虚构示例组
+// （demo=true），图头挂「示例」标。
 // 状态语义色（只用在面板内每行行首的小圆点上，面板底色统一半透明白、
 // 文字统一深灰蓝，克制用色、不再一台一堆彩色胶囊）：
 // ok 绿 / due 金 / warn 红 / muted 灰
@@ -201,8 +146,32 @@ const PUMP_BRAND: Record<string, { bg: string; mark: string }> = {
   "Cloudflare Workers AI": { bg: "#f6821f", mark: "Cf" },
   OpenRouter: { bg: "#475569", mark: "OR" },
   硅基流动: { bg: "#0e7490", mark: "硅" },
-  硅基流动新人试用: { bg: "#0e7490", mark: "试" },
+  硅基流动新人赠金: { bg: "#0e7490", mark: "赠" },
   火山方舟: { bg: "#325ab4", mark: "火" },
+};
+
+/** 图内水源的统一形状：台账水源（已点亮的 PUMP_ORDER 各家）＋一枚固定
+    的自有通道槽位（self=true）。槽位是通用机制：名字与头像运行时取
+    用户自己的 Muse 身份（getSelfIdentity），不在台账、无调用统计、
+    不经网关计量。出厂数据里只有槽位机制与中性回落（「我的 Muse」＋
+    通用图标），不写死任何具体名字。 */
+type Src = {
+  key: string;
+  name: string;
+  usageName?: string;
+  quotaText: string;
+  gwCalls7d: number | null;
+  gwTokens7d: number | null;
+  self?: boolean;
+};
+
+const SELF_SOURCE: Src = {
+  key: "self",
+  self: true,
+  name: "",
+  quotaText: "自有通道",
+  gwCalls7d: null,
+  gwTokens7d: null,
 };
 
 function isLit(p: Provider): boolean {
@@ -232,37 +201,115 @@ export function PumpDiagram({
   providers,
   servers: serversProp,
   deck = false,
-  showServers = true,
   isExample = false,
+  serversDemo = false,
+  selfIdentity,
+  sourceOrder,
+  onManage,
+  onReorderServers,
+  onReorderSources,
 }: {
   providers: Provider[];
-  // 本人状态的真实服务器清单（getPumpServers 动作下发，未加载完为空）
+  // 服务器清单（getPumpServers 从用户数据层下发，未加载完为空）
   servers?: PumpServer[];
   // 甲板主题（清新版）：仅换皮——面板改海水渐变 + 底部两层平铺浪花、
   // 连线改水柱（宽幅半透明水蓝渐变柱体 + 虚线流光，柱宽即流量分档）、
   // 顶部服务器节点改云朵形容器、水源节点小幅硬阴影浮标感、网关节点加
   // 船舵标、浅色模式；节点、数据、布局坐标与关闭时完全一致
   deck?: boolean;
-  // 服务器层显隐：只在示例状态或作者本人的看板里出现；新用户自己的
-  // 看板里不画这一层，泵与水源上移收紧，他点亮的水源照常汇入泵。
-  // 内容按状态分开：own（作者本人）画动作下发的真实服务器，示例状态
-  // 画 EXAMPLE_SERVERS 虚构示例，真实服务器信息不进示例展示
-  showServers?: boolean;
   // 示例状态：图头挂「示例」标，免得被当成用户自己的服务器
   isExample?: boolean;
+  // 当前服务器整组仍是虚构示例组（own 态回落时）：图头同样挂示例标
+  serversDemo?: boolean;
+  // 自有通道槽位的运行时身份（用户自己的 Muse 的名字/头像，来自用户
+  // 数据层 getSelfIdentity）；取不到时槽位回落「我的 Muse」＋通用图标
+  selfIdentity?: { name: string | null; avatarUrl: string | null };
+  // 水源排用户自定义顺序（settings 里的名字数组，自有通道记 __self__）；
+  // 空/未设置时按出厂默认序 PUMP_ORDER
+  sourceOrder?: string[];
+  // 标题行「管理」就地入口：打开图下同一套管理面板（服务器＋水源双排）
+  onManage?: () => void;
+  // 拖动落位回调：服务器排新顺序（全部服务器 id）/ 水源排新顺序（名字
+  // 数组，自有通道记 __self__），由页面落库到用户数据层
+  onReorderServers?: (ids: number[]) => void;
+  onReorderSources?: (names: string[]) => void;
 }) {
-  const sources = useMemo(
+  // 台账水源：已点亮且在册的水源——出厂默认名单（PUMP_ORDER）＋用户在
+  // 管理面板里加进图的水源（名字进了用户层顺序表）；名称/额度文案取台账
+  const realSources = useMemo<Src[]>(
     () =>
-      PUMP_ORDER.map((name) => providers.find((p) => p.name === name)).filter(
-        (p): p is Provider => p != null && isLit(p),
-      ),
-    [providers],
+      [...new Set([...PUMP_ORDER, ...(sourceOrder ?? [])])]
+        .map((name) => providers.find((p) => p.name === name))
+        .filter((p): p is Provider => p != null && isLit(p))
+        .map((p) => ({
+          key: `p${p.id}`,
+          name: p.name,
+          quotaText: p.quotaText,
+          gwCalls7d: p.gwCalls7d,
+          gwTokens7d: p.gwTokens7d,
+        })),
+    [providers, sourceOrder],
   );
+  // 自有通道槽位：名字/头像运行时取用户自己的 Muse 身份，取不到回落
+  // 中性占位（「我的 Muse」＋通用图标）——出厂代码不写死任何具体名字
+  const selfName = selfIdentity?.name?.trim() || "我的 Muse";
+  const selfAvatarUrl = selfIdentity?.avatarUrl ?? null;
+  // 全部水源＝台账水源＋自有通道槽位。左右顺序＝抽水优先顺序：用户拖动
+  // 过的按用户层顺序（sourceOrder，槽位记 __self__），否则按出厂默认序
+  // （PUMP_ORDER 先烧快过期，槽位排最后）。顺序只含当前在场水源，缺位
+  // 的按默认序补到末尾——图与图下使用情况表共用这份顺序，序号恒一致。
+  const allSources = useMemo<Src[]>(() => {
+    const self: Src = {
+      ...SELF_SOURCE,
+      name: selfName,
+      usageName: `${selfName} · 自有通道`,
+    };
+    const pool = [...realSources, self];
+    const keyOf = (s: Src) => (s.self ? "__self__" : s.name);
+    const defaultIdx = (s: Src) =>
+      s.self ? PUMP_ORDER.length : PUMP_ORDER.indexOf(s.name);
+    const custom = sourceOrder ?? [];
+    const hasCustom = custom.length > 0;
+    return pool.sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      const ia = hasCustom ? custom.indexOf(ka) : -1;
+      const ib = hasCustom ? custom.indexOf(kb) : -1;
+      if (ia >= 0 && ib >= 0) return ia - ib;
+      if (ia >= 0) return -1;
+      if (ib >= 0) return 1;
+      return defaultIdx(a) - defaultIdx(b);
+    });
+  }, [realSources, selfName, sourceOrder]);
 
-  // 服务器层实际开关：要画这一层且已有节点数据（本人状态等动作下发，
-  // 示例状态用本地虚构集立即可用）
-  const servers = isExample ? EXAMPLE_SERVERS : (serversProp ?? []);
-  const layerOn = showServers && servers.length > 0;
+  const servers = serversProp ?? [];
+  const layerOn = servers.length > 0;
+
+  // ── 分页（常用 / 不常用） ────────────────────────────────────────
+  // 铁规「无计量 ≠ 未使用」：gwCalls7d 为 null＝没有网关统计行（不经
+  // 网关/未接网关——自有通道恒属此类，它走平台自身供能、计量恒为零，
+  // 实际却是全场用量最大）→ 按性质归常用页；有统计行且近 7 天调用
+  // >0 的也是常用；只有被计量过且近 7 天为 0 次的才判不常用。
+  // 服务器按台账 freq 分。页内顺序不变（左→右＝优先顺序）。
+  const isHotSource = (s: Src) => s.gwCalls7d == null || s.gwCalls7d > 0;
+  const srcHot = allSources.filter(isHotSource);
+  const srcCold = allSources.filter((s) => !isHotSource(s));
+  const pages = {
+    hot: {
+      servers: servers.filter((s) => s.freq !== "cold"),
+      sources: srcHot,
+    },
+    cold: {
+      servers: servers.filter((s) => s.freq === "cold"),
+      sources: srcCold,
+    },
+  };
+  const coldCount = pages.cold.servers.length + pages.cold.sources.length;
+  const showTabs = coldCount > 0;
+  const [page, setPage] = useState<"hot" | "cold">("hot");
+  const activePage = page === "cold" && coldCount === 0 ? "hot" : page;
+  const pageServers = pages[activePage].servers;
+  const pageSources = pages[activePage].sources;
 
   // 容器实测宽度（下方 ResizeObserver 回填）：决定宽/紧凑布局与容器高度。
   // <720px 走紧凑布局：整排硬塞窄屏时 fitView 缩放只有约 0.19，字小到
@@ -271,71 +318,100 @@ export function PumpDiagram({
   const compact = boxWidth > 0 && boxWidth < 720;
 
   const { nodes, edges, bounds } = useMemo(() => {
-    const totalW = sources.length * NODE_W + Math.max(0, sources.length - 1) * GAP;
     const pumpW = 224;
-    // 服务器节点宽 248、间距 10：七台一排总宽 1796，比水源排（1086）宽，
-    // 以整图中心对称排布（起始 x 为负，fitView 按全体节点取景）；248×84 的
-    // 云形（Font Awesome cloud 轮廓）经实测能把最长的标题＋副标题两行完整
-    // 包住、互不重叠。
+    // 服务器节点宽 248、间距 10；248×84 的云形（Font Awesome cloud
+    // 轮廓）经实测能把最长的标题＋副标题两行完整包住、互不重叠。
     const srvW = 248;
     const srvGap = 10;
-    const srvStartX =
-      (totalW - (servers.length * srvW + (servers.length - 1) * srvGap)) / 2;
-    // ── 布局分支 ────────────────────────────────────────────────
-    // 宽版（桌面）：服务器一排、水源一排，坐标与旧版逐项一致。
-    // 紧凑版（手机）：服务器每行 2 台、水源每行 3 家多行排布，图变窄
-    // 变高；bounds 是图面内容宽高（供容器按宽高比折算高度）。
-    const perSrvRow = compact ? 2 : Math.max(1, servers.length);
-    const perSrcRow = compact ? 3 : Math.max(1, sources.length);
-    const srvRowW = (k: number) => k * srvW + Math.max(0, k - 1) * srvGap;
-    const srcRowW = (k: number) => k * NODE_W + Math.max(0, k - 1) * GAP;
+    // ── 分行与居中（定版） ────────────────────────────────────────
+    // 任一排一排放不下（按容器宽折算每行上限）时均衡分行：行数=
+    // ceil(总数/上限)，每行个数尽量均分；行内顺序不变（左→右＝优先
+    // 顺序），sizes[0] 是离泵最近的一行（服务器在泵上方→最底行、
+    // 水源在泵下方→最顶行）。所有行与泵共用同一条中轴（contentW/2）：
+    // 网关恒居中、两侧连线对称汇入，不再按某一排的宽度偏移泵位。
+    const srvCap = compact
+      ? 2
+      : boxWidth === 0 || boxWidth >= 1250
+        ? Number.POSITIVE_INFINITY
+        : boxWidth >= 860
+          ? 4
+          : 3;
+    const srcCap = compact
+      ? 3
+      : boxWidth === 0 || boxWidth >= 1250
+        ? Number.POSITIVE_INFINITY
+        : boxWidth >= 860
+          ? 5
+          : 4;
+    const splitRows = (count: number, cap: number): number[] => {
+      if (count === 0) return [];
+      const rows = Math.max(1, Math.ceil(count / cap));
+      const base = Math.floor(count / rows);
+      const rem = count % rows;
+      return Array.from({ length: rows }, (_, r) => base + (r < rem ? 1 : 0));
+    };
+    const locate = (
+      sizes: number[],
+      i: number,
+    ): { row: number; col: number } => {
+      let acc = 0;
+      for (let r = 0; r < sizes.length; r++) {
+        const k = sizes[r] ?? 0;
+        if (i < acc + k) return { row: r, col: i - acc };
+        acc += k;
+      }
+      return { row: Math.max(0, sizes.length - 1), col: 0 };
+    };
+    const srvSizes = layerOn ? splitRows(pageServers.length, srvCap) : [];
+    const srcSizes = splitRows(pageSources.length, srcCap);
+    const widestRow = (sizes: number[], w: number, gap: number): number =>
+      sizes.reduce((m, k) => Math.max(m, k * w + Math.max(0, k - 1) * gap), 0);
     const contentW = Math.max(
-      layerOn ? srvRowW(Math.min(perSrvRow, servers.length)) : 0,
-      srcRowW(Math.min(perSrcRow, sources.length)),
+      widestRow(srvSizes, srvW, srvGap),
+      widestRow(srcSizes, NODE_W, GAP),
       pumpW,
     );
+    const centerX = contentW / 2;
     const SRV_PITCH_Y = 268; // 服务器节点最高约 255（状态面板+云+3 枚业务标签）
     const SRC_PITCH_Y = 72;
-    const srvRows = layerOn ? Math.ceil(servers.length / perSrvRow) : 0;
-    const srcRows = Math.ceil(sources.length / perSrcRow);
-    const pumpX = compact ? contentW / 2 - pumpW / 2 : totalW / 2 - pumpW / 2;
-    const pumpY = compact
-      ? layerOn
-        ? srvRows * SRV_PITCH_Y + 8
-        : 8
-      : layerOn
-        ? 262
-        : 8;
-    const srcY0 = compact ? pumpY + 100 : layerOn ? 470 : 216;
-    const contentH = compact
-      ? srcY0 + Math.max(0, srcRows - 1) * SRC_PITCH_Y + 58
-      : layerOn
-        ? 528
-        : 274;
+    const srvRows = srvSizes.length;
+    const srcRows = srcSizes.length;
+    // 网关居中：泵中心＝整图中心
+    const pumpX = centerX - pumpW / 2;
+    const pumpY = layerOn ? srvRows * SRV_PITCH_Y - 6 : 8;
+    const srcY0 = pumpY + (compact ? 100 : 208);
+    const contentH =
+      srcRows > 0
+        ? srcY0 + (srcRows - 1) * SRC_PITCH_Y + 58
+        : pumpY + 118;
     const srvPos = (i: number): { x: number; y: number } => {
-      if (!compact) return { x: srvStartX + i * (srvW + srvGap), y: 0 };
-      const row = Math.floor(i / perSrvRow);
-      const col = i % perSrvRow;
-      const inRow = Math.min(perSrvRow, servers.length - row * perSrvRow);
+      const { row, col } = locate(srvSizes, i);
+      const k = srvSizes[row] ?? 0;
+      const w = k * srvW + Math.max(0, k - 1) * srvGap;
       return {
-        x: (contentW - srvRowW(inRow)) / 2 + col * (srvW + srvGap),
-        y: row * SRV_PITCH_Y,
+        x: centerX - w / 2 + col * (srvW + srvGap),
+        // sizes[0] 离泵最近＝最底行，故行序上下翻转
+        y: (srvRows - 1 - row) * SRV_PITCH_Y,
       };
     };
     const srcPos = (i: number): { x: number; y: number } => {
-      if (!compact) return { x: i * (NODE_W + GAP), y: layerOn ? 470 : 216 };
-      const row = Math.floor(i / perSrcRow);
-      const col = i % perSrcRow;
-      return { x: col * (NODE_W + GAP), y: srcY0 + row * SRC_PITCH_Y };
+      const { row, col } = locate(srcSizes, i);
+      const k = srcSizes[row] ?? 0;
+      const w = k * NODE_W + Math.max(0, k - 1) * GAP;
+      return {
+        x: centerX - w / 2 + col * (NODE_W + GAP),
+        y: srcY0 + row * SRC_PITCH_Y,
+      };
     };
     const ns: Node[] = !layerOn
       ? []
-      : servers.map((s, i) => ({
-      id: `srv-${i}`,
+      : pageServers.map((s, i) => ({
+      id: `srv-${s.id}`,
       type: "output" as const,
       targetPosition: Position.Bottom,
       position: srvPos(i),
-      draggable: false,
+      // 可拖动调序：左右顺序＝优先顺序，拖完由页面落库（用户数据层）
+      draggable: true,
       selectable: false,
       data: {
         label: (
@@ -641,21 +717,21 @@ export function PumpDiagram({
     // 甲板主题：每条连线先垫一层宽幅半透明水蓝渐变「柱体」（水柱本体，
     // 先入数组＝渲染在下层），再叠原 animated 虚线作柱面流光；柱宽即流量。
     const es: Edge[] = [];
-    if (layerOn) servers.forEach((_s, i) => {
+    if (layerOn) pageServers.forEach((s) => {
       // 紧凑版不垫水柱：多行排布下粗柱会压过中间行的节点，只留流光线
       if (deck && !compact) {
         es.push({
-          id: `srv-edge-bg-${i}`,
+          id: `srv-edge-bg-${s.id}`,
           source: "pump",
-          target: `srv-${i}`,
+          target: `srv-${s.id}`,
           animated: false,
           style: { stroke: WATER_STROKE, strokeWidth: 10, opacity: 0.85 },
         });
       }
       es.push({
-        id: `srv-edge-${i}`,
+        id: `srv-edge-${s.id}`,
         source: "pump",
-        target: `srv-${i}`,
+        target: `srv-${s.id}`,
         animated: true,
         style: {
           stroke: deck ? "#1293cc" : "var(--accent)",
@@ -664,15 +740,16 @@ export function PumpDiagram({
         },
       });
     });
-    sources.forEach((p, i) => {
-      const cfg = PIPE[p.name] ?? { width: 2, animated: false };
+    pageSources.forEach((p, i) => {
+      const cfg = p.self ? SELF_PIPE : (PIPE[p.name] ?? { width: 2, animated: false });
       const brand = PUMP_BRAND[p.name] ?? { bg: "#0d5c4d", mark: "·" };
       ns.push({
-        id: `src-${p.id}`,
+        id: `src-${p.key}`,
         type: "input",
         sourcePosition: Position.Top,
         position: srcPos(i),
-        draggable: false,
+        // 可拖动调序：左右顺序＝抽水优先顺序，拖完由页面落库（用户层）
+        draggable: true,
         selectable: false,
         data: {
           label: (
@@ -712,24 +789,67 @@ export function PumpDiagram({
               >
                 {i + 1}
               </span>
-              <span
-                aria-hidden="true"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 30,
-                  height: 30,
-                  borderRadius: 8,
-                  backgroundColor: brand.bg,
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                {brand.mark}
-              </span>
+              {p.self && selfAvatarUrl ? (
+                <img
+                  src={selfAvatarUrl}
+                  alt=""
+                  aria-hidden="true"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : p.self ? (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: "#0f766e",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="17"
+                    height="17"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="3" fill="#fff" stroke="none" />
+                    <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" />
+                  </svg>
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: brand.bg,
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {brand.mark}
+                </span>
+              )}
               <span style={{ textAlign: "left", minWidth: 0 }}>
                 <span
                   style={{
@@ -784,8 +904,8 @@ export function PumpDiagram({
       // 紧凑版同服务器边：不垫柱体，免得压过中间行的水源节点
       if (deck && !compact) {
         es.push({
-          id: `pipe-bg-${p.id}`,
-          source: `src-${p.id}`,
+          id: `pipe-bg-${p.key}`,
+          source: `src-${p.key}`,
           target: "pump",
           animated: false,
           style: {
@@ -796,8 +916,8 @@ export function PumpDiagram({
         });
       }
       es.push({
-        id: `pipe-${p.id}`,
-        source: `src-${p.id}`,
+        id: `pipe-${p.key}`,
+        source: `src-${p.key}`,
         target: "pump",
         animated: cfg.animated,
         style: {
@@ -816,7 +936,82 @@ export function PumpDiagram({
       });
     });
     return { nodes: ns, edges: es, bounds: { w: contentW, h: contentH } };
-  }, [sources, deck, layerOn, servers, compact]);
+  }, [pageSources, deck, layerOn, pageServers, compact, boxWidth, selfAvatarUrl]);
+
+  // ── 拖动调序（左右顺序＝优先顺序） ────────────────────────────────
+  // 拖动中只跟手移动被拖的那一个（dragPos 覆盖其坐标，其余节点不动）；
+  // 松手时按落点与同排节点的行序（先行后列）算出新顺序，经回调落库到
+  // 用户数据层，数据回来后布局重算、节点带过渡落位。图下使用情况表与
+  // 图共用同一份顺序（pageSources/allSources），序号恒同步。
+  const [dragPos, setDragPos] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const flowNodes = useMemo(
+    () =>
+      dragPos
+        ? nodes.map((n) =>
+            n.id === dragPos.id
+              ? { ...n, position: { x: dragPos.x, y: dragPos.y } }
+              : n,
+          )
+        : nodes,
+    [nodes, dragPos],
+  );
+  const handleNodeDragStop = (_e: unknown, dragged: Node) => {
+    setDragPos(null);
+    const posOf = (n: Node) => (n.id === dragged.id ? dragged.position : n.position);
+    const rowMajor = (a: Node, b: Node) => {
+      const pa = posOf(a);
+      const pb = posOf(b);
+      const ra = Math.round(pa.y / 60);
+      const rb = Math.round(pb.y / 60);
+      return ra !== rb ? ra - rb : pa.x - pb.x;
+    };
+    if (dragged.id.startsWith("srv-")) {
+      const pageIds = pageServers.map((s) => s.id);
+      const sorted = nodes
+        .filter((n) => n.id.startsWith("srv-"))
+        .sort(rowMajor)
+        .map((n) => Number(n.id.slice(4)));
+      if (sorted.join(",") === pageIds.join(",")) return;
+      const all = servers.map((s) => s.id);
+      const rest = all.filter((id) => !pageIds.includes(id));
+      const at = Math.max(
+        0,
+        all.findIndex((id) => pageIds.includes(id)),
+      );
+      const insertAt = Math.min(at, rest.length);
+      onReorderServers?.([
+        ...rest.slice(0, insertAt),
+        ...sorted,
+        ...rest.slice(insertAt),
+      ]);
+    } else if (dragged.id.startsWith("src-")) {
+      const keyOf = (s: Src) => (s.self ? "__self__" : s.name);
+      const pageKeys = pageSources.map(keyOf);
+      const byNodeId = new Map(pageSources.map((s) => [`src-${s.key}`, keyOf(s)]));
+      const sorted = nodes
+        .filter((n) => n.id.startsWith("src-"))
+        .sort(rowMajor)
+        .map((n) => byNodeId.get(n.id))
+        .filter((k): k is string => k != null);
+      if (sorted.join(",") === pageKeys.join(",")) return;
+      const all = allSources.map(keyOf);
+      const rest = all.filter((k) => !pageKeys.includes(k));
+      const at = Math.max(
+        0,
+        all.findIndex((k) => pageKeys.includes(k)),
+      );
+      const insertAt = Math.min(at, rest.length);
+      onReorderSources?.([
+        ...rest.slice(0, insertAt),
+        ...sorted,
+        ...rest.slice(insertAt),
+      ]);
+    }
+  };
 
   // ── 居中适配：容器宽度变化 / 水源增减后重新 fitView ──────────────────
   const flowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
@@ -856,44 +1051,52 @@ export function PumpDiagram({
       ro.disconnect();
       window.clearTimeout(timer);
     };
-    // sources.length 入 deps：容器 div 只在有水源时才渲染，出现后要补挂观察
-  }, [fit, sources.length]);
+    // allSources.length 入 deps：容器 div 只在有水源时才渲染，出现后要补挂观察
+  }, [fit, allSources.length]);
 
   // 水源点亮/熄灭导致节点排布变化时也重新居中
   useEffect(() => {
     fit();
   }, [fit, nodes]);
 
-  // 还没有任何已点亮水源：整图不画，给一块空状态面板（新用户自己的
-  // 看板初始就是这样——空白是预期，不是坏了）
-  if (sources.length === 0) {
+  // 还没有任何已点亮水源、也没有服务器：整图不画，给一块空状态面板
+  // （新用户自己的看板初始就是这样——空白是预期，不是坏了）
+  if (realSources.length === 0 && servers.length === 0) {
     return (
       <section
-        aria-label="补给泵图"
+        aria-label="资源调度图"
         className={`deck-panel overflow-hidden rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-[var(--surface)] ${
           deck ? "relative" : ""
         }`}
       >
         <div className="px-4 py-5">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--text)]">
-            补给泵图
-            {isExample ? (
-              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                示例
-              </span>
+          <div className="flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--text)]">
+              资源调度图
+              {isExample || serversDemo ? (
+                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                  示例
+                </span>
+              ) : null}
+            </h2>
+            {onManage ? (
+              <button
+                type="button"
+                onClick={onManage}
+                aria-label="管理资源调度图（服务器与水源）"
+                className="ml-auto min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-[var(--text)] ring-1 ring-[var(--border)]"
+              >
+                管理
+              </button>
             ) : null}
-          </h2>
+          </div>
           <p className="mt-1 text-sm leading-6 text-[var(--dim)]">
-            这里还是空的。把下面任意一家 API 权益点亮，它就会作为水源出现在这里、汇入补给泵；你自己的服务器不会预置，领到后由你逐件添置。
+            还没有点亮的 API。点亮下面任意一家，它就会作为水源出现在这里。
           </p>
         </div>
       </section>
     );
   }
-
-  const hasAnyReal = sources.some(
-    (p) => p.gwCalls7d != null && p.gwCalls7d > 0,
-  );
 
   const reduced =
     typeof window !== "undefined" &&
@@ -925,30 +1128,52 @@ export function PumpDiagram({
 
   return (
     <section
-      aria-label="补给泵图"
+      aria-label="资源调度图"
       className={`deck-panel overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] ${
         deck ? "deck-aqua relative" : ""
       }`}
     >
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-4 pb-1 pt-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-1 pt-3">
         <h2 className="flex shrink-0 items-center gap-2 text-base font-semibold text-[var(--text)]">
-          补给泵图
-          {isExample ? (
+          资源调度图
+          {isExample || serversDemo ? (
             <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
               示例
             </span>
           ) : null}
         </h2>
-        <span className="text-xs text-[var(--dim)]">
-          {hasAnyReal
-            ? "边宽按近 7 天真实调用绘制；使用情况在图下逐行列出"
-            : "暂按额度绘制：管子越粗量越大，流动的管子是每日/每周刷新的"}
-        </span>
-        <span className="text-xs font-medium text-[var(--text)]">
-          从左到右 = 优先顺序（多任务时可同时抽多家）
-        </span>
-        {compact ? (
-          <span className="text-xs text-[var(--dim)]">双指捏合可放大看清</span>
+        <span className="text-xs text-[var(--dim)]">从左到右 = 优先顺序（可拖动调序）</span>
+        {showTabs ? (
+          <div className="pump-tabs" role="tablist" aria-label="资源分页">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activePage === "hot"}
+              onClick={() => setPage("hot")}
+              className={activePage === "hot" ? "pump-tab pump-tab-on" : "pump-tab"}
+            >
+              常用资源
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activePage === "cold"}
+              onClick={() => setPage("cold")}
+              className={activePage === "cold" ? "pump-tab pump-tab-on" : "pump-tab"}
+            >
+              不常用资源
+            </button>
+          </div>
+        ) : null}
+        {onManage ? (
+          <button
+            type="button"
+            onClick={onManage}
+            aria-label="管理资源调度图（服务器与水源）"
+            className="ml-auto min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-[var(--text)] ring-1 ring-[var(--border)]"
+          >
+            管理
+          </button>
         ) : null}
       </div>
       <div
@@ -957,17 +1182,21 @@ export function PumpDiagram({
         style={{ height: boxHeight }}
       >
         <ReactFlow
-          nodes={nodes}
+          nodes={flowNodes}
           edges={reduced ? edges.map((e) => ({ ...e, animated: false })) : edges}
           onInit={(instance) => {
             flowRef.current = instance;
             requestAnimationFrame(() => fit());
           }}
+          onNodeDrag={(_e, node) =>
+            setDragPos({ id: node.id, x: node.position.x, y: node.position.y })
+          }
+          onNodeDragStop={handleNodeDragStop}
           fitView
           fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
           minZoom={0.2}
           maxZoom={2}
-          nodesDraggable={false}
+          nodesDraggable
           nodesConnectable={false}
           elementsSelectable={false}
           panOnDrag={false}
@@ -1014,21 +1243,34 @@ export function PumpDiagram({
           </>
         ) : null}
       </div>
-      {/* 使用情况：直接放在泵图下面，一行一家、竖着排（不再挂在连线上）。
-          顺序与图上从左到右的抽水优先级一致，序号与水源节点角标同号；
-          有真实调用显真实数，暂无调用保留额度文案并注明暂无调用。 */}
+      {/* 使用情况：直接放在图下面，一行一家、竖着排（不再挂在连线上），
+          跟随当前页签只列这一页的水源。顺序与图上从左到右的抽水优先级
+          一致，序号与水源节点角标同号；有真实调用显真实数，暂无调用
+          保留额度文案并注明暂无调用。 */}
       <div className="relative border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         <h3 className="text-sm font-semibold text-[var(--text)]">使用情况</h3>
+        {pageSources.length === 0 ? (
+          <p className="mt-1.5 text-sm text-[var(--dim)]">这一页还没有水源。</p>
+        ) : null}
         <ul className="mt-1.5 divide-y divide-[var(--border)]">
-          {sources.map((p, i) => {
-            const cfg = PIPE[p.name] ?? { label: undefined, width: 2, animated: false };
+          {pageSources.map((p, i) => {
+            const cfg = p.self
+              ? SELF_PIPE
+              : (PIPE[p.name] ?? { label: undefined, width: 2, animated: false });
             const hasReal = p.gwCalls7d != null && p.gwCalls7d > 0;
-            const usage = hasReal
-              ? `近 7 天 ${p.gwCalls7d} 次 · ${formatTokens(p.gwTokens7d ?? 0)} tokens`
-              : `${cfg.label ?? p.quotaText ?? "额度待填"} · 暂无调用`;
+            // 口径分三档，如实写：自有通道不经网关计量（实际用量最大，
+            // 不编数字）；未接网关的渠道写「未接网关计量」——无计量 ≠
+            // 未使用；被计量且近 7 天为 0 的才写「暂无调用」
+            const usage = p.self
+              ? "自有通道 · 不经网关计量，实际用量最大"
+              : hasReal
+                ? `近 7 天 ${p.gwCalls7d} 次 · ${formatTokens(p.gwTokens7d ?? 0)} tokens`
+                : p.gwCalls7d == null
+                  ? `${cfg.label ?? p.quotaText ?? "额度待填"} · 未接网关计量`
+                  : `${cfg.label ?? p.quotaText ?? "额度待填"} · 近 7 天暂无调用`;
             const brand = PUMP_BRAND[p.name] ?? { bg: "#0d5c4d", mark: "·" };
             return (
-              <li key={p.id} className="flex min-h-9 items-center gap-2.5 py-1.5">
+              <li key={p.key} className="flex min-h-9 items-center gap-2.5 py-1.5">
                 <span
                   aria-hidden="true"
                   className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-extrabold leading-none text-[#3d2c00]"
@@ -1041,15 +1283,44 @@ export function PumpDiagram({
                 >
                   {i + 1}
                 </span>
-                <span
-                  aria-hidden="true"
-                  className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
-                  style={{ backgroundColor: brand.bg }}
-                >
-                  {brand.mark}
-                </span>
+                {p.self && selfAvatarUrl ? (
+                  <img
+                    src={selfAvatarUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-[26px] w-[26px] shrink-0 rounded-md object-cover"
+                  />
+                ) : p.self ? (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md"
+                    style={{ backgroundColor: "#0f766e" }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" fill="#fff" stroke="none" />
+                      <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" />
+                    </svg>
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
+                    style={{ backgroundColor: brand.bg }}
+                  >
+                    {brand.mark}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)]">
-                  {p.name}
+                  {p.usageName ?? p.name}
                 </span>
                 <span className="shrink-0 text-sm text-[var(--ink-2)]">{usage}</span>
               </li>

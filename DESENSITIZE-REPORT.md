@@ -1,71 +1,84 @@
-# 脱敏检查报告（2026-11-17，第六版导出，推送前）
+# 脱敏检查报告（2026-11-20，第七版导出，推送前）
 
-导出物：Muse Space「战利品甲板」（slug: yang-mao-token-chi）当前版（v52）源码快照，
-覆盖第五版（v50）导出物，对应发布版本 v0.2.2。本版新增：手机端泵图触摸
-滑动修复——xyflow 自带样式给覆盖整张图的 `.react-flow__pane` 写死了
-`touch-action: none`，手机上手指落在泵图任意位置起手滑动都被判给 JS、
-页面滚不动（图又占大半屏，等于大半屏死区）；修复为在 theme.css 中以更高
-优先级把泵图 pane 的 `touch-action` 改回 `pan-y`：单指上下滑恢复页面
-滚动，双指捏合不属于 pan-y、仍落到 xyflow 的 zoomOnPinch，捏合放大保留。
-选择器带 `section[aria-label="补给泵图"]` 前缀，只作用于泵图一块。
-前版内容沿用：泵图图框高度修复（紧凑版容器高度按图面纯宽高比折算、
-ResizeObserver 宽高双监听防抖重 fit）、补给泵图窄屏紧凑竖排布局、手机端
-卡墙 3 列、甲板主题下手机端卡下文字预留行高收紧、示例/本人自动切换与
-39 家目录、泵图服务器状态面板（状态在上、业务在下）与无缝平铺海浪、
-Font Awesome 云形节点（页脚署名保留）、Floating UI 详情弹框统一锚定
-定位、各板块内图鉴序号各自从 1 重新编。
+导出物：Muse Space「战利品甲板」（slug: yang-mao-token-chi）当前版（v62）源码快照，
+覆盖第六版（v52）导出物，对应发布版本 v0.3.0。本版内容：技能图鉴 v2/v2.1
+（标签＋工作流画布＋通用/专属分家）、规格 §7 双层模型编辑能力补齐（每板块
+加卡/改/删/隐藏、自加 Skill、自建工作流、服务器清单数据层、设置抽屉）、
+卡墙两栏定名（免费算力 / 免费Token（API可调度））、战令落点、点亮状态
+两张脸规格、资源调度图（原补给泵图改名）分页与三纠正、图上拖动调序落库、
+双排就地管理面板、自有通道通用槽位（运行时身份）。
 原则：全量打包源码与素材，脱敏只替换数据值，不删代码与素材；发布版只带
 示例数据与示例状态逻辑。本报告只写处理类别，不复述被清除的具体值。
 
-## 与上一版的差异（逐文件比对）
+## 本版新增机制的脱敏要点
 
-本版与第五版导出物逐文件比对，源码差异仅两个文件、均为本次触摸修复：
-
-| 文件 | 差异 |
-|---|---|
-| `client/src/theme.css` | 新增一段泵图触摸放行规则（`section[aria-label="补给泵图"] .react-flow__pane { touch-action: pan-y; }`）及说明注释，纯样式规则，不含任何数据值 |
-| `client/src/components/pump-diagram.tsx` | 文件头注释补记触摸放行的机制与删规则即复发的警告，纯注释变更，不含任何数据值 |
-
-其余文件（`server/src/actions.ts`、`server/src/schema.ts`、`client/src/App.tsx`、
-`data.example/` 等）沿用第五版脱敏导出物，与当前 Space 源码的差异经逐项
-复核均为既有脱敏口径（见下表），无新增功能变更、无新增数据值。
+- **自有通道槽位**：资源调度图水源排的自有通道格是通用槽位——出厂代码
+  里只有槽位机制与中性回落（名字回落「我的 Muse」、头像回落通用图标），
+  显示名与头像运行时经 `getSelfIdentity` 从用户数据层（settings＋blobs）
+  取。作者本人实例里出现的具体名字/头像是其用户数据层的值，不在源码与
+  种子中，快照零携带。
+- **拖动排序**：服务器顺序存 `pump_servers.sortOrder`、水源顺序存
+  settings 的名字数组，均属用户数据层；出厂只带默认序常量（按额度
+  性质定的公开名单顺序），不带任何人的实际排序。
+- **双排管理面板**：水源排走台账（providers）与卡墙同一条数据路径，
+  无第二份数据；面板代码不含任何真实条目。
 
 ## 已替换/清除的数据值（沿用历版口径）
 
 | 位置 | 处理 |
 |---|---|
-| `server/src/actions.ts` CATALOG（39 家） | 全部条目的 `litStatus`（真实点亮状态）已剥离；魔搭条目的 `taskSeedDoneDay`（真实处理日期）与 `taskCycle` 种子已剥离；Kaggle、Scrapling、AWS 条目的个人备注已剥离 |
-| `server/src/actions.ts` CATALOG · 示例专属条目 | 作者本人的两张服务器卡（云电脑、海外小机——含实例名、机型、个人持有状态与到期日）整条删除，替换为两张中性示例卡「示例云电脑」「示例海外服务器」（`demoOnly`），示例状态机制原样保留、演示数据为虚构示例，目录总数保持 39 |
-| `server/src/actions.ts` SEED | OpenRouter 行的真实 key 尾号、含旧账号/旧 key 情况的 `conditionText`、指向个人服务器的备注已清除，状态改回 `unclaimed`；魔搭行 `taskLastDoneAt`（真实日期）改 `null`；火山方舟行文案改中性口径、备注清空 |
-| `server/src/actions.ts` CATALOG 文案 | 涉及个人账号状态的表述已中性化：Codex 条目的个人账号归属与助手名、AWS/Google Cloud/Groq/Kaggle/Codespaces 条目改用公开版文案（源码中原有的 `publicQuota`/`publicContent` 即为此设，导出时折进主文案并去掉个人版，含 AWS 条目正文中的账号 ID、服务器 IP、注册邮箱与海外地址）、Google Cloud 与 AWS 的个人到期日改回通用周期口径、甲骨文条目的个人注册经历、共享记忆库与本地语音条目中的个人项目指涉、目录头注释中的个人事项变更记录 |
-| `client/src/App.tsx` | key 尾号输入框占位示例改为通用示例；提效工具分区描述中的助手专名已中性化；个人服务器卡的品牌色块/Logo 登记随卡片一并移除，换成两张示例卡登记；Floating UI 定位与板块内序号逻辑原样保留 |
-| `server/src/actions.ts` PUMP_SERVERS + `getPumpServers` | 泵图真实服务器清单只存服务端、仅本人状态经动作下发（客户端代码不含清单）；发布版服务端内置清单已整体替换为与客户端示例节点相同的虚构示例清单 |
-| `client/src/components/pump-diagram.tsx` | 泵图服务器节点由真实服务器名与业务标签（个人业务系统名、站点名、助手驻留信息、真实到期日与月费）改为示例名与通用标签：腾讯云·云服务器 / 香港·云服务器 / Kaggle·免费 GPU / GitHub Codespaces / 云电脑（示例）/ 海外云服务器（示例）/ 云服务器（示例）；状态面板新版式（面板在上、语义色圆点）与 Font Awesome 云形、无缝海浪原样保留；文件头与 SERVERS 注释中的个人事项记录已改写为示例口径；本版的触摸放行说明为纯机制注释（pane 的 touch-action 覆盖原理），与当前 Space 源码逐行比对确认差异仅此注释、该文件不含任何数据值 |
-| `client/src/theme.css` | 本版新增的泵图触摸放行段与此前两段窄屏样式（卡墙 3 列、卡下文字预留行高收紧）均为纯样式规则，不含任何数据值 |
+| `server/src/actions.ts` CATALOG（25 家） | 全部条目的 `litStatus`（真实点亮状态）、魔搭条目的 `taskSeedDoneDay`/`taskCycle` 种子、全部作者备注（`note`）已剥离；带公开版文案的条目（AWS / Google Cloud / Groq / Kaggle / GitHub Codespaces）已折用 `publicQuota`/`publicContent` 并去掉个人版，AWS 与 Google Cloud 的个人到期日改回通用周期口径；Codex 条目的个人账号归属与助手名已中性化；本地语音条目的个人配音指涉已删 |
+| `server/src/actions.ts` CATALOG · 示例专属条目 | 作者本人的两张服务器卡（云电脑、海外小机——含实例名、机型、个人持有状态）整条删除，替换为两张中性示例卡「示例云电脑」「示例海外服务器」（`demoOnly`），示例状态机制原样保留，目录总数保持 25 |
+| `server/src/actions.ts` CATALOG 头注释 | 含个人事项（实例名、助手名、个人注册记录）的变更日志长注释已整行换成中性短注释 |
+| `server/src/actions.ts` SEED | OpenRouter 行的真实 key 尾号、含旧账号/旧 key 情况与个人服务器指向的说明已清除，状态改回 `unclaimed`；魔搭行 `taskCycle`/`taskLastDoneAt` 种子改 `none`/`null`；火山方舟行状态改 `unclaimed`、备注清空 |
+| `server/src/actions.ts` PUMP_SERVERS | 服务端播种清单（本人态）已整体替换为与示例态相同的虚构示例组；真实服务器清单只存在于作者本人实例的数据库，不在源码中 |
+| `client/src/skill-catalog.ts` | 业务专属区三条含个人业务名/内部登记表名的条目已中性化（技能名改通用名、描述去业务专名、分组改「公司业务」）；工作流注册表（`workflow-catalog.ts`）中对应工作流 id 与步骤引用同步改通用名 |
+| `client/src/App.tsx` | 作者服务器卡的品牌色块/Logo 登记随卡片一并移除，换成两张示例卡登记；key 尾号占位为通用示例（沿用前版） |
+| `client/src/components/pump-diagram.tsx` | 自有通道槽位为通用机制（见上）；客户端不含任何服务器清单与具体身份 |
 | `server/src/schema.ts` | 注释中对看板主人的称谓已中性化 |
-| 台账数据库 | 真实 `app.db` 未进仓（`.gitignore` 排除）；`data.example/providers.example.json` 已按脱敏后的 CATALOG 重新生成（39 家，状态全为示例值 `unclaimed`、尾号/备注为空、处理时间为 `null`），本版未变 |
-| README / data.example 说明 | 家数 39；示例专属卡两张；示例状态（board_mode）说明沿用：全新安装从示例状态起步、添置第一件自己的战利品后自动翻转清场 |
+| 台账数据库 | 真实 `app.db` 未进仓（`.gitignore` 排除）；`data.example/providers.example.json` 已按脱敏后的 CATALOG 重新生成（25 家，状态全为示例值 `unclaimed`、尾号/备注为空、处理时间为 `null`） |
+| README / data.example 说明 | 家数 25；分区与功能描述按 v62 现行口径更新（资源调度图、技能图鉴、双层编辑、自有通道槽位、拖动调序）；QShip／QS-qusheng 身份按规格默认保留 |
 
-## 全仓扫描结论（grep，导出后实测；第六版已对全仓源码目录重新复核一遍）
+## 全仓扫描结论（grep，导出后实测，2026-11-20 第七版）
 
-- API key / 令牌模式（`sk-…`、池令牌、Bearer 值）：**0 命中**
-- 个人邮箱（gmail/qq/outlook 等）/ 手机号模式：**0 命中**（drizzle 迁移 journal 的时间戳为构建元数据，非个人信息）
-- 个人标识（法定姓名、邮箱前缀、真实 key 尾号、个人服务器实例名、云电脑产品/账号名、助手专名、个人业务系统与站点名、各服务器的 IP、云厂商账号 ID、个人到期日）：**0 命中**
-- 真实领取记录（litStatus 数据值、taskLastDoneAt/taskSeedDoneDay 日期值、个人到期日）：**0 命中**（源码中仅保留机制本身的字段名与逻辑，无数据值）
-- IPv4 模式扫描在源码目录 **0 命中**（Logo SVG 内的命中均为路径坐标数字，非 IP 地址）。
-- 保留的公开标识：GitHub 组织名 QS-qusheng 与 QShip 项目名、QShip 公开口号中的「船长」角色词——本仓库即该组织下的公开项目（见 README 与 LICENSE），属项目身份、非个人账号信息。
+按规格 §4.7 名单逐项扫描全仓（排除 `.git`、`node_modules`、`.bun-cache`；
+构建残留 `dist/` 已清、不进仓）：
+
+| 模式 | 命中 |
+|---|---|
+| 邮箱前缀 `sijidayun` | 0 |
+| 云账号 ID `172509624898` | 0 |
+| `wangzhiyu` | 0 |
+| IP `18.227.152.83` / `34.27.208.215` / `192.144.163.187` / `47.242.160.193` | 0 / 0 / 0 / 0 |
+| 实例名 `xiaomou-home` / `tunnel-us-1` | 0 / 0 |
+| 真实 key 尾号 `cb26` | 0 |
+| `Dayun` / `王志宇` / `曲生` | 0 / 0 / 0 |
+| `小牛牛` / `小哞哞` / `大副` / `二副` | 0 / 0 / 0 / 0 |
+| `RAYI` / `rayi`（小写） / `睿翼` / `归元` | 0 / 0 / 0 / 0 |
+| `Stevens Point` / `出口门房` / `宿舍机` / `桨叶` / `电机数据校准` / `企微在线登记表` | 全 0 |
+| 美国号号码段（两种写法） | 0 |
+| 云电脑账号 | 0 |
+| CATALOG 中 `litStatus: "…"` 数据值 / `taskSeedDoneDay: "…"` 数据值 | 0 / 0 |
+| `sk-…` 密钥模式 | 0 |
+| 邮箱模式（gmail/qq/outlook/163/icloud） | 0 |
+
+- **白名单人工判定**：`QShip` / `QS-qusheng` 共 16 处（README 项目身份、
+  代码注释、组织链接），按规格默认保留；`船长` 仅出现在 README 的 QShip
+  公开口号与本报告说明行，属项目身份、非个人账号信息，保留（与历版口径
+  一致）。
+- 结论：**黑名单零命中，放行推送**。
 
 ## 构建校验
 
-- 导出物 `bun run typecheck`（client + server）：**通过**（第六版复跑实测）。
-- 服务端动作构建（`build:server`）：**通过**（第六版复跑实测，产物已清、不进仓）；客户端 bundle 由 Muse Space 运行时构建（与前几版相同）。
+- 导出物 `bun run typecheck`（client + server）：**通过**（第七版实测）。
+- 服务端动作构建（`build:server`）：**通过**（第七版实测，产物已清、不进仓）；
+  客户端 bundle 由 Muse Space 运行时构建（与前几版相同）。
 
 ## 截图说明
 
 `docs/screenshots/` 三张仍为首版导出物在本地以演示数据渲染的截图（无任何真实
-台账数据）；其后各版界面新增示例状态横幅、泵图状态面板、窄屏紧凑布局、
-图框高度修复与触摸滑动修复等，截图未随版重截，推送前可按需用本版导出物
-重新渲染替换。
+台账数据）；其后各版界面变化（示例横幅、技能图鉴、资源调度图、编辑入口等）
+未随版重截，推送前可按需用本版导出物重新渲染替换。
 
 ## 未进仓文件（说明）
 

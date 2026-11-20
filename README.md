@@ -22,12 +22,11 @@ LootDeck 把这三件事收进一页：**领了的点亮成图鉴，没领的一
 
 ### 有哪些免费的 AI 额度可以领？
 
-按资源类型分四类（本项目内置目录，数字来自各平台公开的免费层政策，会随官方调整变化，以官方为准）：
+按资源类型分三类（本项目内置目录，数字来自各平台公开的免费层政策，会随官方调整变化，以官方为准）：
 
-- **模型 API 免费层**：魔搭社区（每日免费推理额度）、硅基流动（新人赠金 + 免费小模型）、Cloudflare Workers AI（每日免费 Neurons）、OpenRouter（免费模型）、火山方舟、Groq、Google Gemini API、智谱 BigModel、Mistral、NVIDIA Build 等。
-- **免费算力 / VPS**：Kaggle（每周免费 GPU 时长）、GitHub Codespaces（每月免费时长）、Google Cloud / Azure / AWS 试用赠金、甲骨文永久免费层等。
-- **提效工具**：给 AI 装备的底层能力件，如浏览器自动化、文档转 Markdown、共享记忆、本地语音等。
-- **工具福利**：各类 AI 工具的免费试用与赠送额度。
+- **模型 API 免费层**：魔搭社区（每日免费推理额度）、硅基流动（新人赠金 + 免费小模型）、Cloudflare Workers AI（每日免费 Neurons）、OpenRouter（免费模型）、火山方舟、Groq、Google Gemini API 等。
+- **免费算力 / VPS**：Kaggle（每周免费 GPU 时长）、GitHub Codespaces（每月免费时长）、Google Cloud / AWS 试用赠金等。
+- **技能图鉴**：给 AI 装备的底层能力件与 Skill，如浏览器自动化、文档转 Markdown、共享记忆、本地语音等，按「要做的事」分标签、组工作流呈现。
 
 目录里每一家都写明了「对你有什么用、额度多少、什么周期刷新、领没领」，点开是详情价值卡：
 
@@ -38,7 +37,7 @@ LootDeck 把这三件事收进一页：**领了的点亮成图鉴，没领的一
 两个层面：
 
 1. **台账层面**：一张图鉴管全部。每家一张卡，点亮 = 已经领好；未点亮 = 还没领。战令等级按点亮数推进，收集进度一眼可见。
-2. **调用层面（可选）**：所有 API 调用收口到一个自托管网关（new-api，见「如何使用」的可选部分），各家渠道按优先级排队，一家限速或抽干自动切下一家；调用统计按渠道回流到补给泵图，近 7 天真实调用量直接画在管子上。不接网关也完全不影响台账与图鉴功能。
+2. **调用层面（可选）**：所有 API 调用收口到一个自托管网关（new-api，见「如何使用」的可选部分），各家渠道按优先级排队，一家限速或抽干自动切下一家；调用统计按渠道回流到资源调度图，近 7 天真实调用量直接画在管子上。不接网关也完全不影响台账与图鉴功能。
 
 ### 额度快过期了，怎么不浪费？
 
@@ -48,12 +47,13 @@ LootDeck 把这三件事收进一页：**领了的点亮成图鉴，没领的一
 
 ## 功能一览
 
-- **四分区图鉴目录**：提效工具 / 免费 VPS / API 能打水 / 工具福利，每家一张卡：官方 Logo、圆形图鉴角标、「对你有什么用」的价值句、额度与状态小字。
+- **图鉴目录**：免费算力 / 免费Token（API可调度）两面卡墙 + 技能图鉴（Skill 与工具按「要做的事」分标签、组工作流呈现），每家一张卡：官方 Logo、圆形图鉴角标、「对你有什么用」的价值句、额度与状态小字。
 - **点亮与战令**：领好一家点亮一家，战令等级 = 已点亮数量，图鉴完成度像游戏进度条一样推进。
 - **到期提醒**：按各家周期（每日 / 每周 / 每月 / 一次性）追踪处理状态，未处理亮红点。
-- **补给泵图**：一张水系图画清资源流向——云端服务器在上、补给泵（网关）在中、水源（各家渠道）在下；水柱粗细按额度或近 7 天真实调用量分档，一眼看出哪家在供水、哪家快干了。
+- **资源调度图**：一张水系图画清资源流向——云端服务器在上、补给泵（网关）在中、水源（各家渠道）在下；水柱粗细按额度或近 7 天真实调用量分档，一眼看出哪家在供水、哪家快干了。图分「常用 / 不常用」两页（无网关计量的渠道按性质归类，不按「没计量」判不常用）；图上还有一条「自有通道」槽位，显示你自己的 Muse 的名字与头像（运行时从你的数据层取，可在设置里改）。服务器与水源两排都能直接拖动调换左右顺序（顺序即优先顺序，松手即存），图下使用情况表序号同步。
+- **就地编辑（双层模型）**：出厂目录只读，你的增改只写你自己的数据层——每个板块都能就地加卡、改卡、删卡（出厂卡只藏不删）；技能图鉴能自加 Skill、自建工作流；资源调度图的服务器与水源在图标题行的「管理」入口里双排一起管（水源与卡墙是同一份台账）；全局设置（看板状态、网关地址、数据导出/导入、已隐藏条目恢复、自有通道身份）在右下角设置抽屉。
 
-![补给泵图](docs/screenshots/03-pump.png)
+![资源调度图](docs/screenshots/03-pump.png)
 
 - **示例状态**：新实例先以内置示例数据起步、顶部横幅明确标注；你点亮/修改/新增任意一家即自动翻转成你自己的看板，示例数据清场、永不混入。
 - **清新甲板界面**：LootDeck 就是这个样子——科技风打底、收集图鉴感、清新色系、2.5D 厚圆角卡片；界面即主题，不另设素版。
@@ -61,7 +61,7 @@ LootDeck 把这三件事收进一页：**领了的点亮成图鉴，没领的一
 ## 数据口径
 
 - 本仓库内置目录中的额度数字，来自各平台**公开的免费层政策与官方页面**，为项目维护时点的记录；各平台政策随时可能调整，**请以官方最新说明为准**。
-- 仓库内的台账数据是**演示数据**（见 `data.example/`），不包含任何真实账号的领取记录；目录结构（39 家的分类与条目）保留作示例，你可以按自己的账号情况增删。
+- 仓库内的台账数据是**演示数据**（见 `data.example/`），不包含任何真实账号的领取记录；目录结构（25 家的分类与条目）保留作示例，你可以按自己的账号情况增删。
 - 本项目不对任何平台的可用性、额度真实性作保证。
 
 ## 如何使用
@@ -87,7 +87,7 @@ LootDeck 是一个 **Muse Space 全栈应用**，源码分三层：
    git clone https://github.com/QS-qusheng/LootDeck.git
    ```
 2. 在 Muse 里把该目录作为一个 TypeScript Space 打开/创建（入口与运行时声明在 `space.json`：入口 `client/dist/index.html`、运行时 `typescript`）。Space 运行时会提供 `@hatch/space-sdk` 与数据库，`package.json` 里该依赖指向你本机 Muse 的 spaces 运行时路径，如路径不一致，按你本机运行时位置调整这一行即可。
-3. 首次打开页面时，应用会先写入 5 家种子条目、再自动执行一次目录同步（`syncCatalog`），把内置 39 家目录补齐成图鉴。新实例从**示例状态**起步：整张甲板是内置示例数据、顶部横幅明确标注「示例状态」，其中有两张示例专属的服务器卡（示例状态逻辑见 `data.example/README.md`）。
+3. 首次打开页面时，应用会先写入 5 家种子条目、再自动执行一次目录同步（`syncCatalog`），把内置 25 家目录补齐成图鉴。新实例从**示例状态**起步：整张甲板是内置示例数据、顶部横幅明确标注「示例状态」，其中有两张示例专属的服务器卡（示例状态逻辑见 `data.example/README.md`）。
 4. 不用手动切换：在示例状态下点亮任意一家、修改任意一家、或新增一家，都算添置了你的第一件战利品——应用会自动翻转到**你自己的状态**（你动手的那行保留，其余示例数据复位、示例专属卡清场消失），之后记的全是你的数据，再不混入示例。
 
 ### 把演示数据换成你自己的
@@ -95,7 +95,7 @@ LootDeck 是一个 **Muse Space 全栈应用**，源码分三层：
 - **领取状态、key 尾号、备注、上次处理时间是个人记录**：演示目录里它们是示例值（状态全为未领、尾号与备注为空）；补给泵图上方的服务器层只在示例状态（或看板里还有示例专属条目时）出现，翻转到你自己的状态后自动隐藏。逐项说明与模板在 [`data.example/README.md`](data.example/README.md)，照着改：
   - 在页面上点开每张卡，即可更新状态与备注（日常用法，不用碰文件）；
   - 想批量规划目录，先改 `data.example/providers.example.json` 做草稿，再对应改 `server/src/actions.ts` 的 `CATALOG`（增删平台、改文案都在这里），重新部署后打开页面会自动同步进你的台账，且**不会覆盖**你已记的状态、备注与 key 尾号。
-- **补给泵图上方的服务器节点**是示例配置（`client/src/components/pump-diagram.tsx` 里的 `SERVERS`），改成你自己的服务器名即可。
+- **资源调度图上方的服务器清单**存在你的数据层里（不是代码常量）：点图标题行的「管理」就能增删改，图与图下呈现读同一份清单、改完即时生效；开源版内置的只是一组虚构示例服务器。
 - **真实数据库文件（`app.db`）不要提交到任何公开仓库**——`.gitignore` 已排除；完整 key 更不要写进任何文件，台账里只记尾号。
 
 ### 本地构建校验（可选，开发者）
@@ -114,7 +114,7 @@ bun run typecheck  # 类型检查
 
 1. 自行部署开源网关 [new-api](https://github.com/QuantumNous/new-api)（AGPLv3），把各家渠道的 key 填进网关（key 只存网关，不进本项目）。
 2. 给每个渠道填「额度过期时间」：本项目的「快过期先烧」是在网关渠道选择上加的一条最小规则——同优先级内先选过期最早的一组渠道，补丁思路见「二次开发」。
-3. 把网关近 7 天的分渠道调用量聚合后，调用本项目的服务端动作 `syncGatewayStats` 写回，补给泵图就会按真实调用绘制；不写回时泵图按额度绘制。
+3. 把网关近 7 天的分渠道调用量聚合后，调用本项目的服务端动作 `syncGatewayStats` 写回，资源调度图就会按真实调用绘制；不写回时按额度绘制。
 
 ## 二次开发
 
@@ -129,7 +129,7 @@ bun run typecheck  # 类型检查
 ## 开源素材致谢
 
 - 界面图标部分取自 [game-icons.net](https://game-icons.net)（CC BY 3.0），字体使用 Google Fonts 的开源字体（OFL），像素木纹理取自 OpenGameArt 的 CC0 素材，战令轨道组件来自 bigbullui（MIT）。具体出处见页面页脚署名行。
-- 补给泵图基于 React Flow（@xyflow/react，MIT）渲染；网关部分基于 [new-api](https://github.com/QuantumNous/new-api)（AGPLv3），其许可证义务独立适用于网关组件，请一并遵守。
+- 资源调度图基于 React Flow（@xyflow/react，MIT）渲染；网关部分基于 [new-api](https://github.com/QuantumNous/new-api)（AGPLv3），其许可证义务独立适用于网关组件，请一并遵守。
 
 ## License
 
@@ -139,4 +139,4 @@ bun run typecheck  # 类型检查
 
 ### English summary
 
-**LootDeck （战利品甲板） is an AI resource manager that runs as a Muse Space app** — a visual catalog for every free AI resource you have collected: free model API quotas, free VPS/GPU compute, and AI productivity tools, across four sections with a claim-and-light-up collection mechanic, per-provider refresh cycles with expiry reminders, and a supply-pump diagram that shows how an optional self-hosted gateway routes API calls — burning the soonest-to-expire quota first. To use it, clone this repo into your own Muse workspace and open it as a TypeScript Space; the ledger initializes from the demo catalog in `data.example/`, which you then replace with your own claim records. Quota figures come from each provider's published free-tier policy and may change; always check the official source. Demo data only; no real account records are included. MIT licensed (gateway component under AGPLv3, see above).
+**LootDeck （战利品甲板） is an AI resource manager that runs as a Muse Space app** — a visual catalog for every free AI resource you have collected: free model API quotas, free VPS/GPU compute, and AI productivity tools, across a compute section, an API-token section and a skill atlas with workflows, with a claim-and-light-up collection mechanic, in-place editing on a two-layer data model (read-only factory catalog + your own data layer), and a resource dispatch diagram whose server/source rows can be reordered by dragging, per-provider refresh cycles with expiry reminders, and a supply-pump diagram that shows how an optional self-hosted gateway routes API calls — burning the soonest-to-expire quota first. To use it, clone this repo into your own Muse workspace and open it as a TypeScript Space; the ledger initializes from the demo catalog in `data.example/`, which you then replace with your own claim records. Quota figures come from each provider's published free-tier policy and may change; always check the official source. Demo data only; no real account records are included. MIT licensed (gateway component under AGPLv3, see above).
