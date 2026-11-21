@@ -8,6 +8,9 @@ export type Skill = {
   column: SkillColumn;
   sub: string;
   installed: boolean;
+  /** 名称与简介的来源；沿用用户条目的来源字段，既有条目可省略。 */
+  sourceType?: "bundled" | "github" | "url" | "none";
+  sourcePath?: string;
   /** 调用次数（排序用；初值按现行顺序折算保序，不是真实统计，
       真实累加靠调度侧后续接线） */
   calls: number;
@@ -118,6 +121,21 @@ export const SKILL_CATALOG: readonly Skill[] = [
 {"name": "ui-ux-pro-max", "desc": "UI/UX 设计智能库（配色/字体/界面模式查询）", "column": "D", "sub": "UI数据", "installed": true, "calls": 30, "lastUsed": 1762905240000},
 {"name": "ux-copy", "desc": "UX 文案写作/审查（微文案/错误提示/CTA）", "column": "D", "sub": "UX文案", "installed": true, "calls": 20, "lastUsed": 1762905180000},
 {"name": "ux-writing", "desc": "以用户为中心的界面文案规范与 tone 框架", "column": "D", "sub": "UX文案", "installed": true, "calls": 10, "lastUsed": 1762905120000},
+// QShip 补登：名称与单句简介逐字摘自各自 SKILL.md 的 frontmatter。
+// 包文件存在，agent 安装状态未验证；installed 保守记 false。
+// calls/lastUsed 为新条目的 0/0 保序种子，非真实调用统计。
+{"name": "design-review", "desc": "Review or audit a design/UI across 6 weighted dimensions with Nielsen's 10 heuristics and a prioritized findings table.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/design-review/SKILL.md"},
+{"name": "cognitive-walkthrough", "desc": "Deep-dive usability evaluation of specific user tasks.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/parts/mastepanoski-claude-skills/skills/cognitive-walkthrough/SKILL.md"},
+{"name": "observe", "desc": "Show whether the agent followed the kit's rules in recent sessions: pages edited and measured, Stop hook blocks, findings left open.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/observe/SKILL.md"},
+{"name": "information-architecture", "desc": "Design content structure, hierarchy, labelling, and the navigation model.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/parts/designer-skills/ux-strategy/skills/information-architecture/SKILL.md"},
+{"name": "design-screen", "desc": "Design or build a page, screen, landing page, website, app or UI from a request - the whole job, end to end.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/design-screen/SKILL.md"},
+{"name": "design-tokens", "desc": "Generate, extend, or audit design tokens in DTCG format with the 3-tier architecture (primitive → semantic → component).", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/design-tokens/SKILL.md"},
+{"name": "typography-system", "desc": "Build or repair a typography system: a modular type scale, font choices and loading, hierarchy, line-height/line-length, and fluid sizing — delivered as tokens (Tailwind fontSize config or CSS variables) applied to real components.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/parts/vibe-building-skills/skills/frontend-design/typography-system/SKILL.md"},
+{"name": "design-doctrine", "desc": "The house rules for ANY design or UI work - the verification protocol (run the gate, never claim a number), the absolute no-emoji rule, token by intent, one shared theme, the eight states, one thing leads, and output completeness.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/design-doctrine/SKILL.md"},
+{"name": "user-flow-diagram", "desc": "Diagram screen-level paths, decision points, and branch logic.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/parts/designer-skills/prototyping-testing/skills/user-flow-diagram/SKILL.md"},
+{"name": "design-code", "desc": "Generate production-ready, accessible, token-driven component code for ANY framework (React+Tailwind, Next.js, SwiftUI, Vue, Svelte, Angular, Solid, Web Components/Lit, React Native, Flutter, Jetpack Compose, vanilla CSS, or CSS-in-JS).", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/design-code/SKILL.md"},
+{"name": "gate", "desc": "Run the one-command quality gate and report the real N/N result.", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/gate/SKILL.md"},
+{"name": "ship", "desc": "Run the full gate, responsive + render checks, then produce the release checklist (README badge/current/changelog).", "column": "D", "sub": "QShip 设计工作流", "installed": false, "calls": 0, "lastUsed": 0, "sourceType": "bundled", "sourcePath": "qship-design-workflow/base-skills/ship/SKILL.md"},
 {"name": "short-drama-write", "desc": "短剧写作：可拍摄单集剧本编写/修订/去AI味", "column": "E", "sub": "短剧写作·副A", "installed": true, "calls": 10, "lastUsed": 1762905600000},
 {"name": "customer-registration", "desc": "客户获客登记：客户信息写入在线登记表", "column": "F", "sub": "公司业务", "installed": true, "calls": 60, "lastUsed": 1762905600000},
 {"name": "douyin-personal-publishing", "desc": "个人抖音号发布全流程（检查单/代发/风控/处置）", "column": "F", "sub": "社媒发布·副A", "installed": true, "calls": 50, "lastUsed": 1762905540000},

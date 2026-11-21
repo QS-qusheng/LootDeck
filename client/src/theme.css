@@ -1333,6 +1333,132 @@ button.wf-node:hover {
   font-weight: 800;
   line-height: 1;
 }
+/* 分阶段工作流复用既有画布/节点，只在此分支纵向分组、链内换行。 */
+.wf-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-x: visible;
+  background-color: var(--surface-alt);
+}
+.wf-stage {
+  min-width: 0;
+}
+.wf-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.wf-stage-no {
+  flex: none;
+  color: var(--gold-text);
+  font-variant-numeric: tabular-nums;
+}
+.wf-stages .wf-chain {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 0;
+  width: 100%;
+  min-width: 0;
+}
+.wf-stages .wf-step-item {
+  align-items: center;
+  max-width: 100%;
+}
+.wf-stages .wf-step-main {
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  width: var(--wf-node-w);
+  min-width: 0;
+}
+.wf-stages .wf-node {
+  width: 100%;
+  height: auto;
+  min-height: var(--wf-node-h);
+  background: var(--surface);
+}
+.wf-stages .wf-node-name,
+.wf-stages .wf-node-desc {
+  display: block;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.wf-stages .wf-node-desc {
+  color: var(--ink-2);
+}
+.wf-stages .wf-node-meta {
+  margin-top: 8px;
+}
+.wf-node-note {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+.wf-node-gate,
+.wf-stages .wf-node-gate {
+  border: 2px dashed var(--caught-border);
+  background: var(--caught-bg);
+  box-shadow: none;
+}
+.wf-node-unregistered {
+  border-style: dashed;
+  box-shadow: none;
+}
+.wf-node-unregistered-label {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+.wf-stages .wf-branch-stack {
+  align-self: stretch;
+  min-width: 0;
+  margin-left: 24px;
+}
+.wf-stages .wf-branch-item::before {
+  left: -24px;
+  width: 24px;
+}
+.wf-stages .wf-step-seat {
+  flex-basis: 100%;
+}
+.wf-step-seat .wf-step-main {
+  width: 100%;
+}
+.wf-seat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.wf-seat strong {
+  color: var(--text);
+}
+.wf-seat-note {
+  flex-basis: 100%;
+}
 button.skill-tile {
   cursor: pointer;
   font: inherit;

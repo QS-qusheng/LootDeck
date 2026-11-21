@@ -1449,11 +1449,15 @@ const WF_NODE_ACCENTS: Record<string, string> = {
 
 function WfNodeCard({
   name,
+  title,
   desc,
+  note,
   calls,
   stepNo,
+  node,
   accent,
   kind,
+  unregistered,
   exclusive,
   branch,
   highlighted,
@@ -1462,11 +1466,15 @@ function WfNodeCard({
   onJump,
 }: {
   name: string;
+  title?: string;
   desc: string;
+  note?: string;
   calls?: number;
   stepNo?: number;
+  node?: string;
   accent: string;
-  kind: "body" | "ref";
+  kind: "body" | "ref" | "gate";
+  unregistered?: boolean;
   exclusive?: boolean;
   branch?: boolean;
   highlighted?: boolean;
@@ -1474,32 +1482,36 @@ function WfNodeCard({
   bodyId?: string;
   onJump?: () => void;
 }) {
+  const label = title ?? name;
   const inner = (
     <>
       <div className="wf-node-head">
         <span className="wf-node-badge" style={{ background: accent }} aria-hidden="true">
-          {name.charAt(0).toUpperCase()}
+          {node ?? name.charAt(0).toUpperCase()}
         </span>
-        <span className="wf-node-name">{name}</span>
+        <span className="wf-node-name">{label}</span>
       </div>
       <p className="wf-node-desc">{desc}</p>
+      {note ? <p className="wf-node-note">{note}</p> : null}
       <div className="wf-node-meta">
-        {stepNo != null ? <span className="wf-node-chip">第 {stepNo} 步</span> : null}
+        {node ? <span className="wf-node-chip">节点 {node}</span> : stepNo != null ? <span className="wf-node-chip">第 {stepNo} 步</span> : null}
         {branch ? <span className="wf-node-chip">分支</span> : null}
         {kind === "ref" ? <span className="wf-node-chip wf-node-chip-ref">引用</span> : null}
+        {kind === "gate" ? <span className="wf-node-chip wf-node-chip-excl">关口</span> : null}
+        {unregistered ? <span className="wf-node-unregistered-label">目录未登记</span> : null}
         {exclusive ? <span className="wf-node-chip wf-node-chip-excl">业务专属</span> : null}
         {calls != null ? <span className="wf-node-chip">调用 {calls} 次</span> : null}
       </div>
     </>
   );
-  const cls = `wf-node${kind === "ref" ? " wf-node-ref" : ""}${highlighted ? " skill-highlighted" : ""}`;
+  const cls = `wf-node${kind === "ref" ? " wf-node-ref" : ""}${kind === "gate" ? " wf-node-gate" : ""}${unregistered ? " wf-node-unregistered" : ""}${highlighted ? " skill-highlighted" : ""}`;
   if (kind === "ref") {
     return (
       <button
         type="button"
         onClick={onJump}
         title={refNote ? `${refNote} · 点此跳到本体` : undefined}
-        aria-label={`${name}，引用卡，${refNote ?? ""}，点击跳到本体`}
+        aria-label={`${label}${title && name && title !== name ? `，${name}` : ""}，引用卡，${refNote ?? ""}，点击跳到本体`}
         className={cls}
       >
         {inner}
@@ -1507,7 +1519,7 @@ function WfNodeCard({
     );
   }
   return (
-    <article id={bodyId} className={cls} tabIndex={0} aria-label={`${name}${stepNo != null ? `，第 ${stepNo} 步` : ""}`}>
+    <article id={bodyId} className={cls} tabIndex={0} aria-label={`${label}${title && name && title !== name ? `，${name}` : ""}${stepNo != null ? `，第 ${stepNo} 步` : ""}${kind === "gate" ? "，关口" : ""}${unregistered ? "，目录未登记" : ""}`}>
       {inner}
     </article>
   );
@@ -2180,7 +2192,7 @@ function SkillAtlas({ category, providerTiles }: {
   };
 
   // 渲染一条工作流：独立成区——实色头（线名＋用途＋适用＋步数/点亮）＋
-  // 点阵画布（节点链沿基线横排，超宽在画布内横向滚动）。currentTab＝当前
+  // 点阵画布（旧线横排滚动，有阶段数据时按阶段纵向堆叠、节点换行）。currentTab＝当前
   // 所在标签/组键：步骤本体与当前处同标签时是本体节点，否则是引用节点；
   // 步骤带 branches 时该节点向右一对多分叉，分支节点同款。
   const renderWorkflow = (wf: Workflow, currentTab: SkillColumn | "company" | "personal") => {
@@ -2189,26 +2201,62 @@ function SkillAtlas({ category, providerTiles }: {
       name: stepSkillName(step),
       branches: stepBranches(step),
       stepNo: i + 1,
+      index: i,
+      detail: typeof step === "string" ? undefined : step,
     }));
-    const steps = allSteps.filter(({ name }) => {
+    const staged = allSteps.some(({ detail }) => detail?.stage != null);
+    const steps = allSteps.filter(({ name, detail }) => {
       const skill = skillByName.get(name);
       const merged = MERGED_SKILL_INFO[name];
-      return matches(name, skill?.desc ?? merged?.desc ?? "");
+      const stepContext = [
+        detail?.node,
+        detail?.note,
+        detail?.stage != null ? wf.stages?.[detail.stage - 1] : undefined,
+      ].filter(Boolean).join(" ");
+      return matches(name, skill?.desc ?? merged?.desc ?? "") ||
+        (detail != null && matches(detail.title ?? "", stepContext));
     });
     if (q !== "" && steps.length === 0 && !wf.title.toLowerCase().includes(q)) return null;
     const branchCount = allSteps.reduce((n, s) => n + s.branches.length, 0);
 
-    const renderNode = (name: string, stepNo: number | undefined, branch: boolean) => {
+    const renderNode = (name: string, stepNo: number | undefined, branch: boolean, detail?: (typeof allSteps)[number]["detail"]) => {
       const skill = skillByName.get(name);
       const merged = MERGED_SKILL_INFO[name];
+      if (detail?.kind === "seat") {
+        return (
+          <div className="wf-seat">
+            <span className="wf-node-chip">{detail.node ?? "席位"}</span>
+            <strong>{detail.title ?? name}</strong>
+            {name ? <span className="wf-seat-skill">{name}</span> : null}
+            {name && !skill && !merged ? <span className="wf-node-unregistered-label">目录未登记</span> : null}
+            {detail.note ? <span className="wf-seat-note">{detail.note}</span> : null}
+          </div>
+        );
+      }
+      const nodeProps = { title: detail?.title, node: detail?.node, note: detail?.note };
+      if (detail?.kind === "gate") {
+        return (
+          <WfNodeCard
+            {...nodeProps}
+            name={name}
+            desc={name || detail.note || ""}
+            note={name ? detail.note : undefined}
+            stepNo={stepNo}
+            accent={accent}
+            kind="gate"
+            unregistered={Boolean(name && !skill && !merged)}
+          />
+        );
+      }
       const isBodyHere =
         skill != null &&
         (wf.zone === "exclusive" ? skill.column === "F" : skill.column === currentTab);
       if (skill && isBodyHere) {
         return (
           <WfNodeCard
+            {...nodeProps}
             name={name}
-            desc={skill.desc}
+            desc={detail?.title ? name : skill.desc}
             calls={skill.calls}
             stepNo={stepNo}
             accent={accent}
@@ -2223,8 +2271,9 @@ function SkillAtlas({ category, providerTiles }: {
       if (skill) {
         return (
           <WfNodeCard
+            {...nodeProps}
             name={name}
-            desc={skill.desc}
+            desc={detail?.title ? name : skill.desc}
             calls={skill.calls}
             stepNo={stepNo}
             accent={accent}
@@ -2238,8 +2287,9 @@ function SkillAtlas({ category, providerTiles }: {
       if (merged) {
         return (
           <WfNodeCard
+            {...nodeProps}
             name={name}
-            desc={merged.desc}
+            desc={detail?.title ? name : merged.desc}
             calls={merged.calls}
             stepNo={stepNo}
             accent={accent}
@@ -2252,17 +2302,43 @@ function SkillAtlas({ category, providerTiles }: {
       }
       return (
         <WfNodeCard
+          {...nodeProps}
           name={name}
-          desc="条目已删除"
+          desc={detail?.title ? name : ""}
           stepNo={stepNo}
           accent={accent}
-          kind="ref"
+          kind="body"
           branch={branch}
-          refNote="条目已删除 · 点此处理"
-          onJump={() => {}}
+          unregistered
         />
       );
     };
+    const renderStep = ({ name, branches, stepNo, index, detail }: (typeof allSteps)[number], i: number) => (
+      <li key={`${wf.id}-${index}`} className={`wf-step-item${detail?.kind === "seat" ? " wf-step-seat" : ""}`}>
+        {i > 0 && detail?.kind !== "seat" ? <span className="wf-link" aria-hidden="true" /> : null}
+        <div className="wf-step-main">
+          {renderNode(name, stepNo, false, detail)}
+          {branches.length > 0 ? (
+            <div className="wf-branch-stack">
+              {branches.map((b, branchIndex) => (
+                <div key={`${wf.id}-${index}-br-${branchIndex}`} className="wf-branch-item">
+                  {renderNode(b, undefined, true)}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </li>
+    );
+    // 连续阶段按源顺序分组，过滤后也保留原步序及 key，不按技能名合并。
+    const stageGroups: Array<{ stage: number | undefined; steps: typeof allSteps }> = [];
+    if (staged) {
+      for (const step of steps) {
+        const previous = stageGroups[stageGroups.length - 1];
+        if (previous && previous.stage === step.detail?.stage) previous.steps.push(step);
+        else stageGroups.push({ stage: step.detail?.stage, steps: [step] });
+      }
+    }
 
     return (
       <section key={wf.id} className="wf-canvas-block" aria-labelledby={`wf-${wf.id}`}>
@@ -2308,26 +2384,18 @@ function SkillAtlas({ category, providerTiles }: {
           <p className="wf-canvas-purpose">{wf.purpose}</p>
           <p className="wf-canvas-applies">适用：{wf.appliesTo}</p>
         </div>
-        <div className="wf-canvas-scroll">
-          <ol className="wf-chain">
-            {steps.map(({ name, branches, stepNo }, i) => (
-              <li key={`${wf.id}-${name}`} className="wf-step-item">
-                {i > 0 ? <span className="wf-link" aria-hidden="true" /> : null}
-                <div className="wf-step-main">
-                  {renderNode(name, stepNo, false)}
-                  {branches.length > 0 ? (
-                    <div className="wf-branch-stack">
-                      {branches.map((b) => (
-                        <div key={`${wf.id}-${name}-br-${b}`} className="wf-branch-item">
-                          {renderNode(b, undefined, true)}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
+        <div className={`wf-canvas-scroll${staged ? " wf-stages" : ""}`}>
+          {staged ? stageGroups.map(({ stage, steps: stageSteps }, groupIndex) => (
+            <section className="wf-stage" key={`${wf.id}-stage-${groupIndex}`} aria-labelledby={`${wf.id}-stage-${groupIndex}`}>
+              <h5 className="wf-stage-head" id={`${wf.id}-stage-${groupIndex}`}>
+                {stage != null ? <span className="wf-stage-no">{stage}</span> : null}
+                {stage != null ? (wf.stages?.[stage - 1] ?? `阶段 ${stage}`) : "未分阶段"}
+              </h5>
+              <ol className="wf-chain">{stageSteps.map(renderStep)}</ol>
+            </section>
+          )) : (
+            <ol className="wf-chain">{steps.map(renderStep)}</ol>
+          )}
         </div>
       </section>
     );
